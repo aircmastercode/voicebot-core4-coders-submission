@@ -1,128 +1,43 @@
-# P2P Lending Voice AI Assistant Configuration
+# Configuration for the P2P Lending Voice Bot
 
-# API Configuration
-api:
-  # ASR (Automatic Speech Recognition) Configuration
-  asr_service:
-    provider: "whisper"  # Options: whisper, google, azure
-    api_key: "${ASR_API_KEY}"  # Will be loaded from environment variable
-    model: "whisper-1"  # For OpenAI Whisper API
-    language: "auto"  # Auto-detect or specify: en, hi, etc.
-    timeout_seconds: 10
-    streaming: true
+# ==============================================================================
+# AWS Bedrock Configuration
+# ==============================================================================
+aws_bedrock:
+  region: "us-east-1" # Replace with your AWS region if different
+  knowledge_base:
+    model_id: "anthropic.claude-3-sonnet-20240229-v1:0" # Foundational model for knowledge retrieval
+    max_results: 3 # Number of search results to retrieve from the knowledge base
 
-  # TTS (Text-to-Speech) Configuration
-  tts_service:
-    provider: "elevenlabs"  # Options: elevenlabs, google, azure
-    api_key: "${TTS_API_KEY}"  # Will be loaded from environment variable
-    voice_id: "default"  # Default voice ID
-    model: "eleven_multilingual_v2"  # For ElevenLabs
-    optimize_streaming_latency: 4  # Range 0-4, higher is faster but potentially lower quality
-
-  # LLM (Large Language Model) Configuration
-  llm_service:
-    provider: "openai"  # Options: openai, anthropic, azure
-    api_key: "${LLM_API_KEY}"  # Will be loaded from environment variable
-    model: "gpt-4"  # Model name
+  response_generation:
+    model_id: "anthropic.claude-3-haiku-20240307-v1:0" # Cost-effective and fast model for generating responses
     temperature: 0.7
-    max_tokens: 1024
-    top_p: 1.0
-    frequency_penalty: 0.0
-    presence_penalty: 0.0
+    max_tokens: 500
 
-# Audio Processing Configuration
-audio:
-  # Input Audio Configuration
-  input:
-    sample_rate: 16000  # Hz
-    channels: 1  # Mono
-    chunk_size: 1024  # Samples per chunk
-    format: "int16"  # Audio format
-    device_index: 0  # Default audio input device
-  
-  # Noise Cancellation Configuration
-  noise_cancellation:
-    enabled: true
-    strength: 0.75  # Range 0-1
-    model: "default"  # Noise cancellation model
+# ==============================================================================
+# API Gateway Configuration
+# ==============================================================================
+api_gateway:
+  # The base URL should be stored in an environment variable (API_GATEWAY_URL)
+  # Example: https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/dev
+  base_url: "https://9kti499scf.execute-api.us-west-2.amazonaws.com/dev"
 
-  # Output Audio Configuration
-  output:
-    sample_rate: 24000  # Hz
-    channels: 1  # Mono
-    format: "int16"  # Audio format
-    device_index: 0  # Default audio output device
+  # The API key should be stored in an environment variable (API_GATEWAY_KEY)
+  api_key: ""
 
-# NLP Pipeline Configuration
-nlp:
-  # Intent Recognition Configuration
-  intent_recognition:
-    confidence_threshold: 0.7  # Minimum confidence to accept an intent
-    default_intent: "general_inquiry"  # Default intent if none is recognized
-    use_llm: true  # Use LLM for intent recognition
+  endpoints:
+    nlp: "/nlp" # Endpoint for all NLP operations (intent, entities, knowledge base)
 
-  # Entity Extraction Configuration
-  entity_extraction:
-    confidence_threshold: 0.6  # Minimum confidence to accept an entity
-    use_llm: true  # Use LLM for entity extraction
+# ==============================================================================
+# ASR (Automatic Speech Recognition) Configuration
+# ==============================================================================
+asr:
+  model: "whisper-1" # Example model, can be updated as needed
+  language: "en"
 
-  # Context Management Configuration
-  context_management:
-    max_history_length: 10  # Maximum number of conversation turns to keep
-    summary_threshold: 5  # Number of turns before summarizing older context
-    max_tokens: 4000  # Maximum tokens to keep in context
-
-# Response Generation Configuration
-response_generation:
-  max_length: 200  # Maximum response length in tokens
-  style: "conversational"  # Response style: conversational, formal, etc.
-  include_discourse_markers: true  # Include discourse markers like "well", "you know", etc.
-  proactive_suggestions: true  # Proactively suggest next steps or information
-
-# Voice Synthesis Configuration
-voice_synthesis:
-  emotion_mapping:
-    neutral: {"stability": 0.75, "similarity_boost": 0.75}
-    enthusiastic: {"stability": 0.5, "similarity_boost": 0.8}
-    empathetic: {"stability": 0.8, "similarity_boost": 0.7}
-  
-  voice_profiles:
-    english:
-      default: {"voice_id": "EXAVITQu4vr4xnSDxMaL", "model": "eleven_multilingual_v2"}
-    hindi:
-      default: {"voice_id": "pNInz6obpgDQGcFmaJgB", "model": "eleven_multilingual_v2"}
-    hinglish:
-      default: {"voice_id": "pNInz6obpgDQGcFmaJgB", "model": "eleven_multilingual_v2"}
-
-# Knowledge Base Configuration
-knowledge_base:
-  source_directory: "data/knowledge"
-  embedding_model: "text-embedding-ada-002"  # OpenAI embedding model
-  vector_db: "chroma"  # Vector database type
-  similarity_threshold: 0.7  # Minimum similarity score to consider relevant
-
+# ==============================================================================
 # Logging Configuration
+# ==============================================================================
 logging:
-  level: "INFO"  # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  file: "logs/app.log"  # Log file path
-  max_size_mb: 10  # Maximum log file size in MB
-  backup_count: 5  # Number of backup log files to keep
-
-# Performance Configuration
-performance:
-  cache_enabled: true  # Enable response caching
-  cache_ttl_seconds: 3600  # Cache time-to-live in seconds
-  parallel_processing: true  # Enable parallel processing where possible
-  optimize_for: "latency"  # Options: latency, quality, balanced
-
-# Languages Configuration
-languages:
-  default: "en"  # Default language
-  supported: ["en", "hi", "hinglish"]  # Supported languages
-  auto_detect: true  # Auto-detect language
-
-# Application Configuration
-application:
-  name: "P2P Lending Voice AI Assistant"
-  version: "1.0.0"
-  debug_mode: false  # Enable debug mode
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

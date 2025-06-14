@@ -1,356 +1,117 @@
-# Logic for Natural Language Processing (intent, entities, etc.) using AWS Bedrock.
+# This file is ready for the new NLP Pipeline implementation. 
 
 import os
-import json
-import uuid
+import yaml
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+import json
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
 
-# Import API client
-from modules.api_client import P2PLendingAPIClient
+from modules.api_client import APIClient
 
-# Import our AWS configuration
-from config.aws_config import get_aws_config
-
+# Initialize logging
 logger = logging.getLogger(__name__)
 
-class BedrockNLPProcessor:
-    """Main class for handling NLP tasks using AWS Bedrock.
-    
-    This class provides a unified interface for intent recognition, entity extraction,
-    and knowledge retrieval using AWS Bedrock services. It leverages Bedrock agents
-    for understanding user queries about P2P lending.
+@dataclass
+class NLPConfig:
+    """Configuration for the NLP Pipeline, loaded from config.yaml."""
+    api_base_url: str
+    api_key: str
+    api_nlp_endpoint: str
+
+    @classmethod
+    def from_yaml(cls, config_path: str = "config/config.yaml") -> "NLPConfig":
+        """Loads configuration from a YAML file and environment variables."""
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+        except FileNotFoundError:
+            logger.error(f"Configuration file not found at {config_path}")
+            raise
+
+        # Fetch API Gateway details from environment variables for security
+        api_base_url = os.getenv("API_GATEWAY_URL", config.get("api_gateway", {}).get("base_url"))
+        api_key = os.getenv("API_GATEWAY_KEY", config.get("api_gateway", {}).get("api_key"))
+        
+        if not api_base_url:
+            raise ValueError("API_GATEWAY_URL is not set in environment or config.yaml.")
+
+        return cls(
+            api_base_url=api_base_url,
+            api_key=api_key,
+            api_nlp_endpoint=config.get("api_gateway", {}).get("endpoints", {}).get("nlp", "/nlp")
+        )
+
+class NLPPipeline:
     """
-    
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize the Bedrock NLP processor with API client and configuration.
-        """
-        # Get AWS configuration
-        aws_config = get_aws_config()
-        api_config = aws_config.get('api_gateway', {
-            'base_url': os.getenv('API_GATEWAY_URL', 'https://your-api-id.execute-api.us-west-2.amazonaws.com/dev/nlp'),
-            'api_key': os.getenv('API_GATEWAY_KEY', '')
-        })
-        
-        # Initialize API client
-        self.api_client = P2PLendingAPIClient(
-            api_base_url=api_config.get('base_url'),
-            api_key=api_config.get('api_key')
+    Orchestrates NLP processing by sending requests to the backend API.
+    """
+    def __init__(self, config: NLPConfig):
+        self.config = config
+        self.api_client = APIClient(
+            base_url=self.config.api_base_url,
+            api_key=self.config.api_key
         )
-        
-        # Set up logging
-        self.logger = logging.getLogger(__name__)
-        
-        # Initialize session storage
-        self.sessions = {}
-        
-        logger.info(f"Initialized Bedrock NLP Processor")
+        logger.info("NLP Pipeline initialized successfully.")
 
-    def _get_or_create_session(self, session_id: Optional[str] = None) -> str:
-        """Get an existing session or create a new one.
-        
-        Args:
-            session_id: Optional existing session ID
-            
-        Returns:
-            Session ID string
+    def process_input(self, text: str, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        if not session_id:
-            session_id = str(uuid.uuid4())
-            self.sessions[session_id] = {
-                'history': [],
-                'context': {}
-            }
-        return session_id
-    
-    def _add_to_session_history(self, session_id: str, message: Dict[str, str]) -> None:
-        """Add a message to the session history.
-        
-        Args:
-            session_id: Session ID
-            message: Message dictionary with 'role' and 'content' keys
-        """
-        if session_id not in self.sessions:
-            self.sessions[session_id] = {'history': []}
-        
-        self.sessions[session_id]['history'].append(message)
-    
-    def recognize_intent(self, text: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """Recognize user intent from text using the API Gateway.
-        
-        Args:
-            text: User input text
-            session_id: Optional session ID for conversation context
-            
-        Returns:
-            Dictionary containing intent information and confidence
-        """
-        session_id = self._get_or_create_session(session_id)
-        
-        # Store user input in session history
-        self._add_to_session_history(session_id, {'role': 'user', 'content': text})
-        
-        try:
-            # Call the API Gateway endpoint for intent recognition
-            self.logger.info(f"Calling API for intent recognition: {text[:50]}...")
-            response = self.api_client.recognize_intent(text, session_id)
-            
-            # Check for errors in the API response
-            if response.get('error'):
-                self.logger.error(f"API error: {response.get('message')}")
-                return {
-                    'intent': 'OTHER',
-                    'confidence': 0.3,
-                    'error': response.get('message'),
-                    'session_id': session_id
-                }
-                
-            # Extract intent from API response
-            intent = response.get('intent', 'OTHER')
-            confidence = response.get('confidence', 0.7)
-            
-            # Add response to session history
-            self._add_to_session_history(session_id, {'role': 'assistant', 'content': f"Intent: {intent}"})
-            
-            return {
-                'intent': intent,
-                'confidence': confidence,
-                'raw_response': response.get('raw_response', ''),
-                'session_id': session_id,
-                'entities': response.get('entities', {})
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error in intent recognition: {str(e)}")
-            return {
-                'intent': 'OTHER',
-                'confidence': 0.3,
-                'error': str(e),
-                'session_id': session_id,
-                'entities': {}
-            }
-    
-    def extract_entities(self, user_input: str, intent: str = None) -> Dict[str, Any]:
-        """Extract entities from user input using Bedrock.
-        
-        Args:
-            user_input: The user's query text
-            intent: Optional intent to guide entity extraction
-            
-        Returns:
-            Dictionary of extracted entities
-        """
-        try:
-            # Call the API Gateway endpoint for entity extraction
-            self.logger.info(f"Calling API for entity extraction: {user_input[:50]}...")
-            
-            # Use the API client to extract entities
-            response = self.api_client.extract_entities(text=user_input, intent=intent)
-            
-            # Check for errors in the API response
-            if response.get('error'):
-                self.logger.error(f"API error: {response.get('message')}")
-                return {}
-            
-            # Parse the response body if it's a string (JSON)
-            if 'body' in response and isinstance(response['body'], str):
-                try:
-                    response_data = json.loads(response['body'])
-                    entities = response_data.get('entities', {})
-                    return entities
-                except json.JSONDecodeError:
-                    self.logger.error("Failed to parse entity extraction response as JSON")
-                    return {}
-            
-            # If the response already contains entities directly
-            return response.get('entities', {})
-            
-        except Exception as e:
-            self.logger.error(f"Error extracting entities: {str(e)}")
-            return {}
-    
-    def query_knowledge_base(self, query: str, max_results: int = 3) -> List[Dict[str, Any]]:
-        """Query the knowledge base through API Gateway.
-        
-        Args:
-            query: Search query
-            max_results: Maximum number of results to return
-            
-        Returns:
-            List of knowledge base results
-        """
-        try:
-            # Call the API Gateway endpoint for knowledge base queries
-            self.logger.info(f"Calling API for knowledge base query: {query[:50]}...")
-            response = self.api_client.query_knowledge_base(query, max_results)
-            
-            # Debug: Log the raw response structure
-            self.logger.info(f"Knowledge base response type: {type(response)}, keys: {list(response.keys()) if isinstance(response, dict) else 'N/A'}")
-            
-            # Check for errors in the API response
-            if response.get('error'):
-                self.logger.error(f"API error: {response.get('message')}")
-                return []
-            
-            # Parse the response body if it's a string (JSON)
-            if 'body' in response and isinstance(response['body'], str):
-                try:
-                    self.logger.info(f"Parsing response body: {response['body'][:200]}...")
-                    response_data = json.loads(response['body'])
-                    self.logger.info(f"Parsed response data keys: {list(response_data.keys())}")
-                    
-                    if 'results' in response_data:
-                        self.logger.info(f"Found results: {response_data['results'][:2]}")
-                        return response_data['results']
-                    else:
-                        self.logger.warning(f"No 'results' key found in knowledge base response. Keys: {list(response_data.keys())}")
-                        return []
-                except json.JSONDecodeError as e:
-                    self.logger.error(f"Failed to parse knowledge base response as JSON: {str(e)}")
-                    return []
-            
-            # If the response already contains results directly
-            return response.get('results', [])
-            
-        except Exception as e:
-            self.logger.error(f"Error querying knowledge base: {str(e)}")
-            return []
-    
-    def generate_response(self, user_input: str, intent_data: Dict[str, Any], 
-                         session_id: Optional[str] = None) -> str:
-        """Generate a response using API Gateway and Lambda with hybrid knowledge base + LLM approach.
-        
-        Args:
-            user_input: The user's query text
-            intent_data: Intent and entity information
-            session_id: Optional session ID for conversation context
-            
-        Returns:
-            Generated response text
-        """
-        session_id = self._get_or_create_session(session_id)
-        
-        # Get conversation history from session
-        history = self.sessions.get(session_id, {}).get('history', [])
-        
-        try:
-            # Call the API Gateway endpoint for response generation
-            self.logger.info(f"Calling API for response generation: {user_input[:50]}...")
-            
-            # First query knowledge base for context
-            self.logger.info("Querying knowledge base for relevant context...")
-            kb_results = self.query_knowledge_base(user_input)
-            
-            # Extract content from knowledge base results
-            knowledge_context = []
-            if kb_results and isinstance(kb_results, list):
-                self.logger.info(f"Found {len(kb_results)} relevant knowledge base items")
-                for result in kb_results:
-                    if 'content' in result and result['content']:
-                        # Add source attribution to the content
-                        source = result.get('source', 'Unknown')
-                        content = result.get('content', '')
-                        knowledge_context.append(f"{content}\n(Source: {source})")
-            else:
-                self.logger.info("No relevant knowledge base items found")
-            
-            # Then generate response using the API client with knowledge context
-            self.logger.info("Generating response with knowledge context...")
-            response = self.api_client.generate_response(
-                query=user_input,
-                knowledge_items=knowledge_context,
-                conversation_history=history,
-                session_id=session_id
-            )
-            
-            # Check for errors in the API response
-            if response.get('error'):
-                self.logger.error(f"API error: {response.get('message')}")
-                return "I'm sorry, I'm having trouble generating a response right now. Please try again later."
-            
-            # Get the generated response text
-            response_text = response.get('response', "I'm sorry, I'm having trouble generating a response right now.")
-            
-            # Add response to session history
-            self._add_to_session_history(session_id, {'role': 'assistant', 'content': response_text})
-            
-            return response_text
-            
-        except Exception as e:
-            self.logger.error(f"Error generating response: {str(e)}")
-            return "I'm sorry, I'm having trouble generating a response right now. Please try again later."
+        Processes user input by calling the backend NLP service.
 
+        This single method sends the user's text to the API Gateway,
+        which then routes it to a Lambda function. The Lambda is responsible for
+        the full NLP workflow: intent recognition, entity extraction, and 
+        knowledge base retrieval.
 
-# Example usage
-if __name__ == "__main__":
-    import logging
+        Args:
+            text: The user's input text.
+            session_id: An optional session ID for maintaining context.
+
+        Returns:
+            A dictionary with the structured NLP output from the backend,
+            or None if an error occurred.
+        """
+        if not text:
+            logger.warning("Input text is empty. Skipping processing.")
+            return None
+
+        payload = {
+            "operation": "generate_response",
+            "text": text,
+            "session_id": session_id
+        }
+
+        logger.info(f"Sending text to NLP backend with payload: {json.dumps(payload, indent=2)}")
+        response = self.api_client.post(self.config.api_nlp_endpoint, payload)
+
+        if response:
+            logger.info(f"Raw response from backend: {json.dumps(response, indent=2)}")
+            logger.info("Successfully received NLP processing results from backend.")
+            return response
+        else:
+            logger.error("Failed to get a response from the NLP backend.")
+            return None
+
+# Example usage:
+if __name__ == '__main__':
+    # This is for demonstration purposes. 
+    # In the actual application, the pipeline would be initialized once.
+    logging.basicConfig(level=logging.INFO)
     
-    # Set up logging
-    logging.basicConfig(level=logging.INFO, 
-                      format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    # Initialize processor with default AWS workshop configuration
-    processor = BedrockNLPProcessor()
-    
-    # Log the API Gateway configuration being used
-    api_config = get_aws_config().get('api_gateway', {})
-    logger.info(f"Using API Gateway URL: {api_config.get('base_url', 'Not configured')}")
-    logger.info(f"Using API Gateway stage: {api_config.get('stage', 'dev')}")
-    logger.info(f"API Key configured: {'Yes' if api_config.get('api_key') else 'No'}")
-    logger.info(f"AWS region: {get_aws_config().get('aws', {}).get('region_name', 'us-west-2')}")
-    
+    # Ensure you have a config.yaml and your .env file is set up
+    # with API_GATEWAY_URL and API_GATEWAY_KEY for this to work.
     try:
-        # Test intent recognition
-        logger.info("Testing intent recognition...")
-        result = processor.recognize_intent("What are the current interest rates for P2P lending?")
-        print(f"Intent: {result['intent']}")
-        print(f"Confidence: {result['confidence']}")
-        if 'entities' in result:
-            print(f"Entities: {result['entities']}")
-        else:
-            print("No entities in result")
+        nlp_config = NLPConfig.from_yaml()
+        pipeline = NLPPipeline(config=nlp_config)
         
-        # Test entity extraction
-        logger.info("Testing entity extraction...")
-        entities = processor.extract_entities("I want to invest 50,000 rupees for 6 months at 12% interest rate")
-        print(f"Extracted entities: {entities}")
-        
-        # Test knowledge base query
-        logger.info("Testing knowledge base query...")
-        kb_results = processor.query_knowledge_base("P2P lending regulations in India")
-        
-        if kb_results and isinstance(kb_results, list):
-            logger.info(f"Found {len(kb_results)} knowledge base results")
-            for result in kb_results:
-                print(f"Source: {result.get('source', 'Unknown')}")
-                print(f"Content: {result.get('content', '')[:100]}...")
-                print(f"Score: {result.get('score', 0)}")
-                print("---")
-        else:
-            print("No knowledge base results returned or invalid format.")
-            logger.warning(f"KB results type: {type(kb_results)}, value: {kb_results}")
-            
-        # Test hybrid response generation
-        logger.info("\n\nTesting hybrid response generation...")
-        print("\nUser query: What are the regulations for P2P lending in India?")
-        
-        # Get intent data
-        intent_data = processor.recognize_intent("What are the regulations for P2P lending in India?")
-        
-        # Generate response with hybrid approach
-        response = processor.generate_response(
-            user_input="What are the regulations for P2P lending in India?",
-            intent_data=intent_data,
-            session_id="test-session-123"
-        )
-        
-        print("\nGenerated response:")
-        print(f"{response}\n")
-        print("---"*20)
-            
-    except Exception as e:
-        logger.error(f"Error during testing: {e}")
-        print("To use this module, you need to configure the API Gateway URL and API key")
-        print("in your .env file or update the config/aws_config.py file with your API Gateway settings.")
-        print(f"Error details: {str(e)}")
+        # Example of processing user input
+        user_query = "Hi, what are the risks of peer-to-peer lending?"
+        nlp_result = pipeline.process_input(user_query, session_id="test-session-123")
+
+        if nlp_result:
+            print("\n--- NLP Result ---")
+            print(json.dumps(nlp_result, indent=2))
+            print("------------------\n")
+
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to initialize NLP pipeline: {e}") 

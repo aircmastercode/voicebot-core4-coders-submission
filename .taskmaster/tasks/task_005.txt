@@ -1,6 +1,6 @@
 # Task ID: 5
 # Title: Implement Automatic Speech Recognition (ASR) Module
-# Status: pending
+# Status: done
 # Dependencies: 1
 # Priority: high
 # Description: Develop an ASR module with multilingual support and noise cancellation.

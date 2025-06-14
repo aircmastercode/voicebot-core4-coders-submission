@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Develop NLP Pipeline
-# Status: pending
+# Status: done
 # Dependencies: 2, 4
 # Priority: high
 # Description: Create an NLP pipeline for intent recognition, entity extraction, and context management.

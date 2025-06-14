@@ -13,188 +13,42 @@ from typing import Dict, Any, Optional, List
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class P2PLendingAPIClient:
-    """
-    Client for interacting with P2P Lending Voice AI Assistant API Gateway endpoints.
-    This client handles communication with the Lambda-backed API for NLP operations.
-    """
-    
-    def __init__(self, api_base_url: str, api_key: Optional[str] = None):
-        """
-        Initialize the API client.
-        
-        Args:
-            api_base_url: Base URL for the API Gateway endpoint
-            api_key: Optional API key for authentication
-        """
-        self.api_base_url = api_base_url.rstrip('/')
-        self.api_key = api_key
-        self.headers = {
-            'Content-Type': 'application/json'
-        }
-        
-        if api_key:
-            self.headers['x-api-key'] = api_key
-    
-    def _make_request(self, endpoint: str, method: str = 'POST', data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """
-        Make an HTTP request to the API Gateway.
-        
-        Args:
-            endpoint: API endpoint path
-            method: HTTP method (GET, POST, etc.)
-            data: Request payload
-            
-        Returns:
-            Response data as dictionary
-        """
-        url = f"{self.api_base_url}/{endpoint}"
-        
-        try:
-            if method.upper() == 'GET':
-                response = requests.get(url, headers=self.headers, params=data)
-            else:
-                response = requests.post(url, headers=self.headers, json=data)
-            
-            response.raise_for_status()
-            return response.json()
-        
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {str(e)}")
-            # Return error information that can be handled by the caller
-            return {
-                'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500
-            }
-    
-    def recognize_intent(self, text: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Recognize user intent from text.
-        
-        Args:
-            text: User input text
-            session_id: Optional session ID for conversation context
-            
-        Returns:
-            Dictionary containing intent information
-        """
-        payload = {
-            'operation': 'recognize_intent',
-            'text': text,
-            'session_id': session_id
-        }
-        
-        return self._make_request('nlp', method='POST', data=payload)
-    
-    def extract_entities(self, text: str, intent: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Extract entities from user text.
-        
-        Args:
-            text: User input text
-            intent: Optional recognized intent to improve entity extraction
-            
-        Returns:
-            Dictionary containing extracted entities
-        """
-        payload = {
-            'operation': 'extract_entities',
-            'text': text,
-            'intent': intent
-        }
-        
-        return self._make_request('nlp', method='POST', data=payload)
-    
-    def query_knowledge_base(self, query: str, max_results: int = 3) -> Dict[str, Any]:
-        """
-        Query the P2P lending knowledge base.
-        
-        Args:
-            query: Search query
-            max_results: Maximum number of results to return
-            
-        Returns:
-            Dictionary containing knowledge base results
-        """
-        payload = {
-            'operation': 'query_knowledge_base',
-            'query': query,
-            'max_results': max_results
-        }
-        
-        return self._make_request('nlp', method='POST', data=payload)
-    
-    def generate_response(self, 
-                         query: str, 
-                         conversation_history: Optional[List[Dict[str, str]]] = None,
-                         knowledge_items: Optional[List[str]] = None,
-                         session_id: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Generate a response using the Bedrock foundation model.
-        
-        Args:
-            query: User query
-            conversation_history: Optional list of conversation history
-            knowledge_items: Optional list of knowledge items to include
-            session_id: Optional session ID
-            
-        Returns:
-            Dictionary containing the generated response
-        """
-        # Format the payload exactly as specified by the user
-        payload = {
-            "operation": "generate_response",
-            "text": query,
-            "context": "Add the context here",  # No period at the end
-            "session_id": session_id or "test-session-12"  # Note: 12 not 123
-        }
-            
-        # Add context from knowledge base if available
-        if knowledge_items and len(knowledge_items) > 0:
-            payload["context"] = "\n\n".join(knowledge_items)
-        
-        # Ensure headers specify application/json
-        self.headers['Content-Type'] = 'application/json'
-        
-        return self._make_request('nlp', method='POST', data=payload)
-    
-    def process_voice_input(self, audio_data: bytes, language_code: str = 'en-US') -> Dict[str, Any]:
-        """
-        Process voice input through the API.
-        
-        Args:
-            audio_data: Binary audio data
-            language_code: Language code for speech recognition
-            
-        Returns:
-            Dictionary containing processed text and detected language
-        """
-        # For voice data, we need to use different headers
-        headers = self.headers.copy()
-        headers['Content-Type'] = 'application/octet-stream'
-        
-        url = f"{self.api_base_url}/speech"
-        
-        try:
-            response = requests.post(
-                url, 
-                headers=headers, 
-                data=audio_data,
-                params={'language_code': language_code}
-            )
-            
-            response.raise_for_status()
-            return response.json()
-        
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Voice processing request failed: {str(e)}")
-            return {
-                'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', 500) if hasattr(e, 'response') else 500
-            }
+class APIClient:
+    """A client for making requests to the NLP API Gateway."""
 
+    def __init__(self, base_url: str, api_key: str):
+        if not base_url:
+            raise ValueError("API base_url cannot be empty.")
+        self.base_url = base_url
+        self.headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key
+        }
+        logger.info(f"APIClient initialized for base URL: {self.base_url}")
+
+    def post(self, endpoint: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Sends a POST request to a specified endpoint.
+
+        Args:
+            endpoint: The API endpoint to send the request to (e.g., '/nlp').
+            data: The JSON payload to send.
+
+        Returns:
+            The JSON response from the API, or None if an error occurs.
+        """
+        url = f"{self.base_url}{endpoint}"
+        try:
+            response = requests.post(url, json=data, headers=self.headers, timeout=30)
+            response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
+            return response.json()
+        except requests.exceptions.HTTPError as http_err:
+            logger.error(f"HTTP error occurred: {http_err} - Response: {response.text}")
+        except requests.exceptions.RequestException as req_err:
+            logger.error(f"A request error occurred: {req_err}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in APIClient: {e}")
+        return None
 
 # Example usage
 if __name__ == "__main__":
@@ -206,15 +60,15 @@ if __name__ == "__main__":
         logger.error("API_GATEWAY_URL environment variable not set")
         exit(1)
         
-    api_client = P2PLendingAPIClient(
-        api_base_url=api_gateway_url,
+    api_client = APIClient(
+        base_url=api_gateway_url,
         api_key=api_gateway_key
     )
     
     # Test intent recognition
-    intent_result = api_client.recognize_intent("How do I invest in P2P lending?")
+    intent_result = api_client.post('/nlp', {'operation': 'recognize_intent', 'text': 'How do I invest in P2P lending?'})
     print(f"Intent: {json.dumps(intent_result, indent=2)}")
     
     # Test knowledge base query
-    kb_result = api_client.query_knowledge_base("What are the regulations for P2P lending in India?")
+    kb_result = api_client.post('/nlp', {'operation': 'query_knowledge_base', 'query': 'What are the regulations for P2P lending in India?', 'max_results': 3})
     print(f"Knowledge Base Results: {json.dumps(kb_result, indent=2)}")
