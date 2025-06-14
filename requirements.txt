@@ -35,3 +35,4 @@ tqdm>=4.61.1
 typing_extensions>=3.10.0
 urllib3>=1.26.5
 pydub>=0.25.1
+boto3>=1.35.1

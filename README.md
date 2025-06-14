@@ -1,128 +1,126 @@
-# P2P Lending Voice AI Assistant
+# P2P Lending Awareness & Sales Voice AI Assistant
 
-A state-of-the-art voice AI assistant designed to educate potential users about Peer-to-Peer lending and guide them through the initial sales and onboarding process. This application uses advanced speech recognition and synthesis capabilities to create natural, human-like conversation flows.
+A voice-enabled AI assistant designed to educate users about P2P lending, guide them through the onboarding process, and answer queries with human-like conversational abilities.
 
-## Key Features
+## Features
 
-- **Voice Input**: Natural speech recognition using OpenAI's Whisper model
-- **Voice Output**: Human-like speech synthesis using OpenAI's TTS API
-- **Contextual Memory**: Remembers conversation history for cohesive interactions
-- **P2P Lending Knowledge**: Extensive knowledge base about P2P lending concepts
-- **Empathetic Responses**: Human-like responses with discourse markers and natural transitions
+- **Hyper-realistic voice synthesis** with emotional resonance
+- **Near-zero latency** interaction
+- **Multilingual support** (English, Hindi, Hinglish)
+- **Advanced acoustic clarity** with noise cancellation
+- **Conversational nuance** with discourse markers
+- **Deep contextual memory** for long conversations
+- **Proactive conversational guidance**
+- **Elegant error handling**
 
 ## Project Structure
 
 ```
-voicebot_submission/
-├── main.py                 # Main entry point for the live demo
-├── run_inference.py        # Script for Round 1 evaluation
-├── requirements.txt        # Python dependencies
-├── config/
-│   └── config.yaml         # Configuration settings
-├── modules/
-│   ├── asr_module.py       # Automatic Speech Recognition module
-│   ├── tts_module.py       # Text-to-Speech module
-│   ├── nlp_pipeline.py     # NLP processing pipeline
-│   ├── response_gen.py     # Response generation module
-│   ├── api_client.py       # API client for AWS services
-│   └── utils.py            # Utility functions
-├── data/
-│   └── sample_audio.wav    # Sample audio for testing
-└── output/                 # Directory for generated output
+.
+├── config/                 # Configuration files
+│   └── config.yaml        # Main configuration
+├── data/                  # Data directory
+│   └── knowledge/         # P2P lending knowledge base
+├── modules/               # Core modules
+│   ├── asr_module.py     # Automatic Speech Recognition
+│   ├── nlp_pipeline.py   # NLP processing pipeline
+│   ├── response_gen.py   # Response generation
+│   └── utils.py          # Utility functions
+├── tests/                 # Test directory
+├── .env.example           # Example environment variables
+├── main.py                # Main entry point
+├── requirements.txt       # Python dependencies
+└── run_inference.py       # Script for inference on test data
 ```
 
 ## Setup Instructions
 
 ### 1. Environment Setup
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/voicebot_submission.git
-   cd voicebot_submission
-   ```
+```bash
+# Clone the repository (if not already done)
+# git clone <repository-url>
 
-2. Create and activate a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+# Navigate to the project directory
+cd /path/to/Project2.0Matrix
 
-3. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+# Create a virtual environment
+python -m venv venv
 
-### 2. API Keys Configuration
+# Activate the virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
 
-Create a `.env` file in the project root with the following variables:
+# Install all dependencies
+pip install -r requirements.txt
 ```
-# AWS Configuration
-API_GATEWAY_URL=https://your-api-gateway-url.amazonaws.com/dev
-API_GATEWAY_KEY=your-api-gateway-key
 
-# OpenAI API Key (for ASR and TTS)
-OPENAI_API_KEY=your-openai-api-key
-```
+### 2. API Keys and Environment Variables
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file with your API keys:
+   - **OpenAI API Key**: For Whisper ASR and GPT-4
+   - **ElevenLabs API Key**: For voice synthesis
+   - Other optional API keys as needed
 
 ### 3. Knowledge Base Setup
 
-The system uses an AWS Bedrock Knowledge Base through the Lambda function. The Lambda function should be configured with:
-- Knowledge base ID
-- AWS region
-- S3 bucket for storing conversation history
+The system uses P2P lending documents for its knowledge base. These are automatically loaded from the `data/knowledge` directory.
 
 ## Running the Application
 
-### Live Demo
+### Main Application
 
-Run the main application with voice interaction:
-```
-python main.py --mode voice
-```
+To start the voice assistant in interactive mode:
 
-Or use text-only mode:
-```
-python main.py --mode text
+```bash
+python main.py
 ```
 
-### Round 1 Evaluation
+### Inference Mode
 
-Run the inference script on test data:
+For Round 1 evaluation, run the inference script which processes test questions and generates responses:
+
+```bash
+python run_inference.py --input path/to/questions.txt --output path/to/responses.txt
 ```
-python run_inference.py --input test.csv --output submission.csv
+
+## Configuration
+
+The application is configured through `config/config.yaml`. Key configuration sections include:
+
+- **API Configuration**: Settings for ASR, TTS, and LLM services
+- **Audio Processing**: Input/output settings and noise cancellation
+- **NLP Pipeline**: Intent recognition, entity extraction, and context management
+- **Voice Synthesis**: Voice profiles and emotion mapping
+- **Knowledge Base**: Vector database settings
+- **Performance**: Caching and optimization settings
+
+## Required Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENAI_API_KEY` | OpenAI API key for Whisper ASR and GPT-4 | Yes |
+| `ELEVENLABS_API_KEY` | ElevenLabs API key for voice synthesis | Yes |
+| `ASR_SERVICE_PROVIDER` | ASR service provider (default: whisper) | No |
+| `TTS_SERVICE_PROVIDER` | TTS service provider (default: elevenlabs) | No |
+| `LLM_SERVICE_PROVIDER` | LLM service provider (default: openai) | No |
+| `DEBUG_MODE` | Enable debug mode (default: false) | No |
+
+## Testing
+
+Run the test suite with:
+
+```bash
+python -m pytest
 ```
 
-## Voice Interaction Instructions
+## License
 
-1. Start the application in voice mode
-2. The assistant will greet you and wait for your input
-3. Speak clearly when prompted
-4. You can say "exit" to end the session or "text" to switch to text mode
-5. In text mode, you can type "voice" to switch back to voice mode
-
-## Advanced Features
-
-- **Low Latency**: Optimized for quick response times and speech processing
-- **Conversation Context**: Maintains history to provide coherent responses
-- **Graceful Error Handling**: Elegantly recovers from ambiguous requests
-- **Proactive Guidance**: Suggests next topics to explore in P2P lending
-- **Discourse Markers**: Uses natural pauses and transitions for human-like speech
-
-## API Requirements
-
-The application expects the following environment variables:
-- `API_GATEWAY_URL`: The base URL for the AWS API Gateway
-- `API_GATEWAY_KEY`: The API key for authentication
-- `OPENAI_API_KEY`: OpenAI API key for ASR and TTS services
-
-## Notes for Evaluators
-
-- The voice interaction can be tested with your system's microphone
-- The ASR module is configured to listen for 5 seconds by default
-- Response quality relies on both the LLM and the provided knowledge base
-- All conversation history is maintained within the session
-
-## Contributors
-
-Developed by Team Innovators for the AI-Humanized Voicebot Hackathon.
-hello commit_4
+[Specify License]
