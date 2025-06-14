@@ -313,9 +313,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 // Play audio response if available and in voice mode
-                if (data.audio_url && mode === 'voice') {
-                    updateBotStatus('speaking');
-                    playAudio(data.audio_url);
+                if (mode === 'voice') {
+                    if (data.audio_url) {
+                        updateBotStatus('speaking');
+                        addSystemMessage('🔊 Playing audio response...');
+                        playAudio(data.audio_url);
+                    } else if (data.tts_status === 'unavailable' && !ttsWarningShown) {
+                        // Show TTS warning only once per session
+                        addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
+                        ttsWarningShown = true;
+                        updateBotStatus('idle');
+                    } else {
+                        updateBotStatus('idle');
+                    }
                 } else {
                     updateBotStatus('idle');
                 }
@@ -410,20 +420,98 @@ document.addEventListener('DOMContentLoaded', () => {
     // Play audio from URL
     function playAudio(url) {
         try {
-            const audio = new Audio(url);
-            audio.onended = () => {
+            // If URL is null, don't try to play audio
+            if (!url) {
+                console.log('No audio URL provided');
+                updateBotStatus('idle');
+                return;
+            }
+            
+            console.log('Playing audio from URL:', url);
+            
+            // Create a visible audio player with controls
+            const audioContainer = document.createElement('div');
+            audioContainer.className = 'audio-player';
+            audioContainer.style.margin = '10px 0';
+            
+            const audioElement = document.createElement('audio');
+            audioElement.controls = true; // Show controls to allow user interaction
+            audioElement.style.width = '100%';
+            audioElement.src = url;
+            
+            // Add a play button for explicit user interaction
+            const playButton = document.createElement('button');
+            playButton.textContent = '▶️ Play Response';
+            playButton.className = 'play-audio-btn';
+            playButton.style.padding = '5px 10px';
+            playButton.style.marginBottom = '5px';
+            playButton.style.backgroundColor = '#4CAF50';
+            playButton.style.color = 'white';
+            playButton.style.border = 'none';
+            playButton.style.borderRadius = '4px';
+            playButton.style.cursor = 'pointer';
+            
+            // Add event listeners
+            playButton.onclick = () => {
+                audioElement.play()
+                    .then(() => {
+                        playButton.style.display = 'none';
+                        audioElement.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error playing audio after click:', error);
+                        addSystemMessage('Audio playback failed. Please try again or check browser settings.');
+                    });
+            };
+            
+            audioElement.onended = () => {
+                console.log('Audio playback ended');
+                updateBotStatus('idle');
+                // Remove the audio player after playback
+                setTimeout(() => {
+                    if (audioContainer.parentNode) {
+                        audioContainer.parentNode.removeChild(audioContainer);
+                    }
+                }, 2000);
+            };
+            
+            audioElement.onerror = (e) => {
+                console.error('Error playing audio:', e);
+                addSystemMessage('Audio playback failed. Please check your browser settings.');
                 updateBotStatus('idle');
             };
-            audio.onerror = () => {
-                console.error('Error playing audio');
-                updateBotStatus('idle');
-            };
-            audio.play().catch(error => {
-                console.error('Error playing audio:', error);
-                updateBotStatus('idle');
-            });
+            
+            // Add elements to the container
+            audioContainer.appendChild(playButton);
+            audioContainer.appendChild(audioElement);
+            
+            // Initially hide the audio element until play is clicked
+            audioElement.style.display = 'none';
+            
+            // Add the audio container to the chat as a system message
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.appendChild(audioContainer);
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+            
+            // Try auto-playing first (might work if user has interacted with page)
+            audioElement.play()
+                .then(() => {
+                    // If autoplay works, hide the play button
+                    playButton.style.display = 'none';
+                    audioElement.style.display = 'block';
+                    console.log('Audio autoplay successful');
+                })
+                .catch(error => {
+                    // If autoplay fails, keep the play button visible for user interaction
+                    console.log('Autoplay prevented, waiting for user interaction:', error);
+                    // Keep the play button visible
+                });
+                
         } catch (error) {
-            console.error('Error creating audio object:', error);
+            console.error('Error setting up audio playback:', error);
+            addSystemMessage('Audio playback failed. Please try again.');
             updateBotStatus('idle');
         }
     }
@@ -507,6 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize the application
     let connectionStatusShown = false;
+    let ttsWarningShown = false;
     init();
     
     // Check connection every 30 seconds
