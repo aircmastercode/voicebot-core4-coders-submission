@@ -28,10 +28,11 @@ node_modules/
 tasks.json
 tasks/ 
 
-# Development tools
+Development tools
 .roo
 .cursor
 .taskmaster
 .env.example
 .roomodes
 .windsurfrules
+
