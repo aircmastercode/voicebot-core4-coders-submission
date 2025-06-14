@@ -305,8 +305,12 @@ def demo_endpoint(mode):
         # Get the appropriate response
         response = DEMO_RESPONSES.get(detected_topic, DEMO_RESPONSES["default"])
         
+        # Create a dummy audio URL to indicate TTS is not available
+        # This will be handled by the frontend to show a message
         return jsonify({
-            "response": response
+            "response": response,
+            "audio_url": None,
+            "tts_status": "unavailable"
         })
         
     elif mode == 'speech':
@@ -331,13 +335,15 @@ def demo_endpoint(mode):
             # Return a clear message about voice recognition being unavailable
             return jsonify({
                 "text": user_query or "Voice input received",
-                "response": "I'm sorry, but voice recognition is currently unavailable due to missing API keys. Please try using the text input mode instead."
+                "response": "I'm sorry, but voice recognition is currently unavailable due to missing API keys. Please try using the text input mode instead.",
+                "tts_status": "unavailable"
             })
         else:
             # Fallback to a generic message
             return jsonify({
                 "text": "Voice input detected",
-                "response": "I'm sorry, but voice recognition is currently unavailable due to missing API keys. Please try using the text input mode instead."
+                "response": "I'm sorry, but voice recognition is currently unavailable due to missing API keys. Please try using the text input mode instead.",
+                "tts_status": "unavailable"
             })
         
     else:

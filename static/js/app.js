@@ -313,9 +313,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 // Play audio response if available and in voice mode
-                if (data.audio_url && mode === 'voice') {
-                    updateBotStatus('speaking');
-                    playAudio(data.audio_url);
+                if (mode === 'voice') {
+                    if (data.audio_url) {
+                        updateBotStatus('speaking');
+                        playAudio(data.audio_url);
+                    } else if (data.tts_status === 'unavailable' && !ttsWarningShown) {
+                        // Show TTS warning only once per session
+                        addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
+                        ttsWarningShown = true;
+                        updateBotStatus('idle');
+                    } else {
+                        updateBotStatus('idle');
+                    }
                 } else {
                     updateBotStatus('idle');
                 }
@@ -410,20 +419,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Play audio from URL
     function playAudio(url) {
         try {
+            // If URL is null, don't try to play audio
+            if (!url) {
+                console.log('No audio URL provided');
+                updateBotStatus('idle');
+                return;
+            }
+            
             const audio = new Audio(url);
             audio.onended = () => {
                 updateBotStatus('idle');
             };
             audio.onerror = () => {
                 console.error('Error playing audio');
+                addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
                 updateBotStatus('idle');
             };
             audio.play().catch(error => {
                 console.error('Error playing audio:', error);
+                addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
                 updateBotStatus('idle');
             });
         } catch (error) {
             console.error('Error creating audio object:', error);
+            addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
             updateBotStatus('idle');
         }
     }
@@ -507,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize the application
     let connectionStatusShown = false;
+    let ttsWarningShown = false;
     init();
     
     // Check connection every 30 seconds
