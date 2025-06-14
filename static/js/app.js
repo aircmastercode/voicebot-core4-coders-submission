@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // API endpoint
     const API_ENDPOINT = '/api';
+    // WebSocket endpoint
+    const WS_ENDPOINT = 'wss://jiehdal92f.execute-api.us-west-2.amazonaws.com/devx/';
 
     // State
     let isRecording = false;
@@ -27,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let mode = 'voice';
     let conversationHistory = [];
     let isConnected = false;
+    let ws = null;
+    let sessionId = null;
+    let currentStreamingMessage = null; // Track the current streaming message element
+    let accumulatedResponse = ''; // Accumulate streaming response chunks
+    let currentTypingAnimation = null; // Track the current typing animation timeout
 
     // Initialize the application
     function init() {
@@ -53,6 +60,259 @@ document.addEventListener('DOMContentLoaded', () => {
             role: 'assistant',
             content: 'Hello! I\'m your P2P Lending Assistant. How can I help you today?'
         });
+
+        // Initialize WebSocket connection
+        connectWebSocket();
+    }
+
+    // Connect to WebSocket
+    function connectWebSocket() {
+        try {
+            updateConnectionStatus('connecting');
+            
+            ws = new WebSocket(WS_ENDPOINT);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connection established');
+                updateConnectionStatus('connected');
+                isConnected = true;
+            };
+            
+            ws.onmessage = (event) => {
+                handleWebSocketMessage(event);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus('error');
+                isConnected = false;
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket connection closed');
+                updateConnectionStatus('disconnected');
+                isConnected = false;
+                
+                // Attempt to reconnect after a delay
+                setTimeout(() => {
+                    if (!isConnected) {
+                        connectWebSocket();
+                    }
+                }, 5000);
+            };
+        } catch (error) {
+            console.error('Error connecting to WebSocket:', error);
+            updateConnectionStatus('error');
+            isConnected = false;
+        }
+    }
+
+    // Handle WebSocket messages
+    function handleWebSocketMessage(event) {
+        try {
+            const data = JSON.parse(event.data);
+            console.log('WebSocket message received:', data);
+            
+            // Check if this is a streaming response chunk
+            if (data.response_chunk) {
+                // Remove the standalone typing indicator when we start receiving chunks
+                removeTypingIndicator();
+                
+                // If this is the first chunk, create a new message
+                if (!currentStreamingMessage) {
+                    // Create a new bot message element
+                    currentStreamingMessage = document.createElement('div');
+                    currentStreamingMessage.className = 'message bot';
+                    currentStreamingMessage.innerHTML = `
+                        <div class="message-content">
+                            <div id="streaming-message"></div>
+                            <div class="typing-indicator">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                        </div>
+                    `;
+                    chatMessages.appendChild(currentStreamingMessage);
+                    
+                    // Reset the accumulated response
+                    accumulatedResponse = '';
+                    
+                    // Update bot status to show it's generating text
+                    updateBotStatus('generating');
+                }
+                
+                // Append the new chunk to the accumulated response
+                const newChunk = data.response_chunk;
+                accumulatedResponse += newChunk;
+                
+                // Update the message content with a line-by-line animation effect
+                const streamingMessageElement = currentStreamingMessage.querySelector('#streaming-message');
+                
+                // Create a new line element for this chunk
+                if (newChunk.trim()) {
+                    const lineElement = document.createElement('p');
+                    lineElement.className = 'line-element animating';
+                    lineElement.innerHTML = formatBotResponse(newChunk);
+                    streamingMessageElement.appendChild(lineElement);
+                    
+                    // Remove animation class after animation completes
+                    setTimeout(() => {
+                        lineElement.classList.remove('animating');
+                    }, 500);
+                }
+                
+                // Scroll to the bottom as new content arrives
+                scrollToBottom();
+                
+                // Save session ID if provided
+                if (data.session_id && !sessionId) {
+                    sessionId = data.session_id;
+                    console.log('Session ID set:', sessionId);
+                }
+            }
+            // Handle complete response (non-streaming)
+            else if (data.response) {
+                // Remove the standalone typing indicator
+                removeTypingIndicator();
+                
+                // If we were in streaming mode, finalize the streaming message
+                if (currentStreamingMessage) {
+                    // Remove the typing indicator
+                    const typingIndicator = currentStreamingMessage.querySelector('.typing-indicator');
+                    if (typingIndicator) {
+                        typingIndicator.remove();
+                    }
+                    
+                    // Add the complete response to conversation history
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: accumulatedResponse
+                    });
+                    
+                    // Reset streaming state
+                    currentStreamingMessage = null;
+                    accumulatedResponse = '';
+                    
+                    // Play audio response if available and in voice mode
+                    if (mode === 'voice' && data.audio_url) {
+                        updateBotStatus('speaking');
+                        addSystemMessage('🔊 Playing audio response...');
+                        playAudio(data.audio_url);
+                    } else {
+                        updateBotStatus('idle');
+                    }
+                } else {
+                    // Display the assistant's response as a new message
+                    addBotMessage(data.response);
+                    
+                    // Add to conversation history
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: data.response
+                    });
+                    
+                    // Play audio response if available and in voice mode
+                    if (mode === 'voice' && data.audio_url) {
+                        updateBotStatus('speaking');
+                        addSystemMessage('🔊 Playing audio response...');
+                        playAudio(data.audio_url);
+                    } else {
+                        updateBotStatus('idle');
+                    }
+                }
+                
+                // Save session ID if provided
+                if (data.session_id && !sessionId) {
+                    sessionId = data.session_id;
+                    console.log('Session ID set:', sessionId);
+                }
+            } else if (data.error) {
+                // Remove the typing indicator
+                removeTypingIndicator();
+                
+                console.error('Response error:', data.error);
+                addBotMessage("I'm sorry, I encountered an issue while processing your request. Could you try again?");
+                
+                // Add to history
+                conversationHistory.push({
+                    role: 'assistant',
+                    content: "I'm sorry, I encountered an issue while processing your request. Could you try again?"
+                });
+                
+                updateBotStatus('error');
+            }
+        } catch (error) {
+            console.error('Error handling WebSocket message:', error);
+            removeTypingIndicator();
+        }
+    }
+
+    // Send message via WebSocket
+    function sendWebSocketMessage(text, audioBlob = null) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket is not connected');
+            return false;
+        }
+        
+        try {
+            // Show typing indicator immediately when sending a message
+            addTypingIndicator();
+            
+            // Update bot status
+            updateBotStatus('thinking');
+            
+            // Add to conversation history
+            conversationHistory.push({
+                role: 'user',
+                content: text
+            });
+            
+            // Create the message payload
+            const payload = {
+                text: text,
+                history: conversationHistory.slice(0, -1) // Don't include the message we just added
+            };
+            
+            // Add session ID if we have one
+            if (sessionId) {
+                payload.session_id = sessionId;
+            }
+            
+            // Send the message
+            ws.send(JSON.stringify(payload));
+            return true;
+        } catch (error) {
+            console.error('Error sending WebSocket message:', error);
+            return false;
+        }
+    }
+    
+    // Add typing indicator as a separate message
+    function addTypingIndicator() {
+        // Remove any existing typing indicator
+        removeTypingIndicator();
+        
+        // Create a new typing indicator
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'message bot typing-message';
+        typingDiv.innerHTML = `
+            <div class="message-content">
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        `;
+        chatMessages.appendChild(typingDiv);
+        scrollToBottom();
+    }
+    
+    // Remove typing indicator
+    function removeTypingIndicator() {
+        const typingMessages = document.querySelectorAll('.typing-message');
+        typingMessages.forEach(msg => msg.remove());
     }
 
     // Switch to voice mode
@@ -144,42 +404,22 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             updateBotStatus('thinking');
             
-            // Create form data for the audio file
+            // Create form data for the audio
             const formData = new FormData();
             formData.append('audio', audioBlob);
-            
-            // Add conversation history
             formData.append('history', JSON.stringify(conversationHistory));
             
-            let data;
+            // Send the audio to the server for processing
+            const response = await fetch(`${API_ENDPOINT}/speech`, {
+                method: 'POST',
+                body: formData
+            });
             
-            try {
-                // First try the regular endpoint
-                const response = await fetch(`${API_ENDPOINT}/speech`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
-
-                data = await response.json();
-            } catch (apiError) {
-                console.warn('Regular API error, falling back to demo endpoint:', apiError);
-                
-                // If that fails, use the demo endpoint
-                const demoResponse = await fetch(`${API_ENDPOINT}/demo/speech`, {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!demoResponse.ok) {
-                    throw new Error(`Demo API error: ${demoResponse.status}`);
-                }
-                
-                data = await demoResponse.json();
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
             }
+            
+            const data = await response.json();
             
             // Process the response
             if (data.text) {
@@ -192,26 +432,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     content: data.text
                 });
                 
-                // If there's a response from the assistant
-                if (data.response) {
-                    // Display the assistant's response
-                    addBotMessage(data.response);
+                // Send the transcribed text to the WebSocket
+                if (isConnected) {
+                    // Don't add user message again, just send to WebSocket
+                    const payload = {
+                        text: data.text,
+                        history: conversationHistory.slice(0, -1) // Don't include the message we just added
+                    };
                     
-                    // Add to conversation history
-                    conversationHistory.push({
-                        role: 'assistant',
-                        content: data.response
-                    });
+                    // Add session ID if we have one
+                    if (sessionId) {
+                        payload.session_id = sessionId;
+                    }
                     
-                    // Play audio response if available
-                    if (data.audio_url) {
-                        updateBotStatus('speaking');
-                        playAudio(data.audio_url);
+                    // Show typing indicator
+                    addTypingIndicator();
+                    
+                    // Send the message
+                    ws.send(JSON.stringify(payload));
+                } else {
+                    // If WebSocket is not connected, handle the response from the REST API
+                    if (data.response) {
+                        // Display the assistant's response
+                        addBotMessage(data.response);
+                        
+                        // Add to conversation history
+                        conversationHistory.push({
+                            role: 'assistant',
+                            content: data.response
+                        });
+                        
+                        // Play audio response if available
+                        if (data.audio_url) {
+                            updateBotStatus('speaking');
+                            playAudio(data.audio_url);
+                        } else {
+                            updateBotStatus('idle');
+                        }
                     } else {
                         updateBotStatus('idle');
                     }
-                } else {
-                    updateBotStatus('idle');
                 }
             } else if (data.error) {
                 showError(data.error);
@@ -224,134 +484,134 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error processing audio:', error);
+            showError("There was a problem processing your voice input. Please try again.");
+            updateBotStatus('error');
             
-            // Show a helpful error message
-            showError("Voice recognition is currently unavailable due to missing API keys. Please use text input mode instead.");
-            
-            // Switch to text mode automatically
-            setTimeout(() => {
-                switchToTextMode();
-            }, 1000);
-            
+            // Reset UI
             voiceStatusText.textContent = 'Click the microphone to speak';
             voiceWaves.classList.remove('active');
-            updateBotStatus('idle');
         }
     }
 
-    // Handle sending text messages
+    // Send text message
     async function sendTextMessage() {
         const text = userInput.value.trim();
-        if (!text) return;
-
-        // Clear input
+        
+        if (!text) {
+            return;
+        }
+        
+        // Clear the input field
         userInput.value = '';
         
-        // Display user message
+        // Add user message to chat
         addUserMessage(text);
         
-        // Add to conversation history
-        conversationHistory.push({
-            role: 'user',
-            content: text
-        });
-
         try {
             updateBotStatus('thinking');
             
-            let data;
-            
-            try {
-                // First try the regular endpoint
-                const response = await fetch(`${API_ENDPOINT}/text`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text,
-                        history: conversationHistory
-                    })
-                });
+            // Try to send via WebSocket first
+            if (isConnected && sendWebSocketMessage(text)) {
+                // Message sent successfully via WebSocket
+                console.log('Message sent via WebSocket');
+            } else {
+                // Fall back to REST API if WebSocket is not available
+                console.log('Falling back to REST API');
+                
+                let data;
+                
+                try {
+                    // First try the regular endpoint
+                    const response = await fetch(`${API_ENDPOINT}/text`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text,
+                            history: conversationHistory
+                        })
+                    });
 
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
 
-                data = await response.json();
-            } catch (apiError) {
-                console.warn('Regular API error, falling back to demo endpoint:', apiError);
-                
-                // If that fails, use the demo endpoint
-                const demoResponse = await fetch(`${API_ENDPOINT}/demo/text`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text,
-                        history: conversationHistory
-                    })
-                });
-                
-                if (!demoResponse.ok) {
-                    throw new Error(`Demo API error: ${demoResponse.status}`);
+                    data = await response.json();
+                }
+                catch (apiError) {
+                    console.error('Error with primary API, trying demo endpoint:', apiError);
+                    
+                    // If the main API fails, try the demo endpoint
+                    try {
+                        const demoResponse = await fetch(`${API_ENDPOINT}/demo/text`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                text,
+                                history: conversationHistory
+                            })
+                        });
+                        
+                        if (!demoResponse.ok) {
+                            throw new Error(`Demo server error: ${demoResponse.status}`);
+                        }
+                        
+                        data = await demoResponse.json();
+                    }
+                    catch (demoError) {
+                        console.error('Both API endpoints failed:', demoError);
+                        showError("I couldn't connect to the server. Please check your internet connection and try again.");
+                        return;
+                    }
                 }
                 
-                data = await demoResponse.json();
-            }
-            
-            // Process the response
-            if (data.response) {
-                // Display the assistant's response
-                addBotMessage(data.response);
-                
-                // Add to conversation history
-                conversationHistory.push({
-                    role: 'assistant',
-                    content: data.response
-                });
-                
-                // Play audio response if available and in voice mode
-                if (mode === 'voice') {
-                    if (data.audio_url) {
-                        updateBotStatus('speaking');
-                        addSystemMessage('🔊 Playing audio response...');
-                        playAudio(data.audio_url);
-                    } else if (data.tts_status === 'unavailable' && !ttsWarningShown) {
-                        // Show TTS warning only once per session
-                        addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
-                        ttsWarningShown = true;
-                        updateBotStatus('idle');
+                // Process the response from REST API
+                if (data.response) {
+                    // Display the assistant's response
+                    addBotMessage(data.response);
+                    
+                    // Add to conversation history
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: data.response
+                    });
+                    
+                    // Play audio response if available and in voice mode
+                    if (mode === 'voice') {
+                        if (data.audio_url) {
+                            updateBotStatus('speaking');
+                            addSystemMessage('🔊 Playing audio response...');
+                            playAudio(data.audio_url);
+                        } else if (data.tts_status === 'unavailable' && !ttsWarningShown) {
+                            // Show TTS warning only once per session
+                            addSystemMessage('Text-to-speech is currently unavailable due to missing API keys.');
+                            ttsWarningShown = true;
+                            updateBotStatus('idle');
+                        } else {
+                            updateBotStatus('idle');
+                        }
                     } else {
                         updateBotStatus('idle');
                     }
-                } else {
-                    updateBotStatus('idle');
+                } else if (data.error) {
+                    console.error('Response error:', data.error);
+                    addBotMessage("I'm sorry, I encountered an issue while processing your request. Could you try again?");
+                    
+                    // Add to history
+                    conversationHistory.push({
+                        role: 'assistant',
+                        content: "I'm sorry, I encountered an issue while processing your request. Could you try again?"
+                    });
+                    
+                    updateBotStatus('error');
                 }
-            } else if (data.error) {
-                console.error('Response error:', data.error);
-                addBotMessage("I'm sorry, I encountered an issue while processing your request. Could you try again?");
-                
-                // Add to history
-                conversationHistory.push({
-                    role: 'assistant',
-                    content: "I'm sorry, I encountered an issue while processing your request. Could you try again?"
-                });
-                
-                updateBotStatus('error');
             }
-            
         } catch (error) {
-            console.error('Error sending text message:', error);
-            addBotMessage("I'm sorry, I'm experiencing technical difficulties. Please try again later.");
-            
-            // Add to history
-            conversationHistory.push({
-                role: 'assistant',
-                content: "I'm sorry, I'm experiencing technical difficulties. Please try again later."
-            });
-            
+            console.error('Error sending message:', error);
+            showError("There was a problem sending your message. Please try again.");
             updateBotStatus('error');
         }
     }
@@ -428,6 +688,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             console.log('Playing audio from URL:', url);
+            
+            // Make sure URL starts with / if it's a relative path
+            if (!url.startsWith('http') && !url.startsWith('/')) {
+                url = '/' + url;
+            }
             
             // Create a visible audio player with controls
             const audioContainer = document.createElement('div');
@@ -550,6 +815,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 botStatus.innerHTML = '<i class="fas fa-circle"></i><span>Thinking</span>';
                 botStatus.className = 'thinking';
                 break;
+            case 'generating':
+                botStatus.innerHTML = '<i class="fas fa-circle"></i><span>Generating</span>';
+                botStatus.className = 'generating';
+                break;
             case 'speaking':
                 botStatus.innerHTML = '<i class="fas fa-circle"></i><span>Speaking</span>';
                 botStatus.className = 'speaking';
@@ -561,44 +830,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Update connection status indicator
+    function updateConnectionStatus(status) {
+        switch (status) {
+            case 'connected':
+                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Connected</span>';
+                connectionStatus.className = 'connected';
+                break;
+            case 'connecting':
+                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Connecting...</span>';
+                connectionStatus.className = 'connecting';
+                break;
+            case 'disconnected':
+                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Disconnected</span>';
+                connectionStatus.className = 'disconnected';
+                break;
+            case 'error':
+                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Connection Error</span>';
+                connectionStatus.className = 'error';
+                break;
+        }
+    }
+
     // Scroll chat to bottom
     function scrollToBottom() {
         chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Check server connection
-    async function checkConnection() {
-        try {
-            const response = await fetch(`${API_ENDPOINT}/health`);
-            if (response.ok) {
-                const data = await response.json();
-                isConnected = true;
-                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Connected</span>';
-                connectionStatus.className = 'connected';
-                
-                // Show limited functionality message if needed
-                if (data.status === 'limited' && !connectionStatusShown) {
-                    connectionStatusShown = true;
-                    addSystemMessage('⚠️ Running with limited functionality. Some features may not work as expected.');
-                }
-            } else {
-                isConnected = false;
-                connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Disconnected</span>';
-                connectionStatus.className = 'disconnected';
-            }
-        } catch (error) {
-            isConnected = false;
-            connectionStatus.innerHTML = '<i class="fas fa-circle"></i><span>Disconnected</span>';
-            connectionStatus.className = 'disconnected';
-        }
     }
 
     // Initialize the application
     let connectionStatusShown = false;
     let ttsWarningShown = false;
     init();
-    
-    // Check connection every 30 seconds
-    checkConnection();
-    setInterval(checkConnection, 30000);
 }); 

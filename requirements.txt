@@ -38,3 +38,4 @@ urllib3>=1.26.5
 pydub>=0.25.1
 noisereduce>=2.0.0
 langdetect>=1.0.9
+websockets>=11.0.0

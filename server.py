@@ -51,7 +51,7 @@ try:
     logger.info("Initializing modules...")
     asr_module = ASRModule(config=asr_config)
     tts_module = TTSModule(config=tts_config)
-    nlp_pipeline = NLPPipeline(config=nlp_config)
+    nlp_pipeline = NLPPipeline(config=nlp_config, tts_service=tts_module)
     response_generator = ResponseGenerator()
     fallback_service = FallbackService()
     
@@ -166,6 +166,57 @@ def process_text():
         
     except Exception as e:
         logger.error(f"Error processing text request: {e}", exc_info=True)
+        error_response = "I'm sorry, I'm experiencing technical difficulties. Please try again later."
+        return jsonify({"error": "Failed to process your request", "response": error_response}), 500
+
+@app.route('/api/text_stream', methods=['POST'])
+def process_text_stream():
+    """Process text input from the user with streaming response"""
+    try:
+        data = request.json
+        user_text = data.get('text')
+        history = data.get('history', [])
+        session_id = data.get('session_id')
+        
+        if not user_text:
+            return jsonify({"error": "No text provided"}), 400
+        
+        # Create a unique session ID for this conversation if not provided
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        
+        logger.info(f"Processing streaming text input: '{user_text}' with session ID: {session_id}")
+        
+        if MODULES_INITIALIZED:
+            try:
+                # Define stream handler
+                def stream_handler(chunk):
+                    logger.debug(f"Received chunk: {chunk}")
+                
+                # Process the text through the NLP pipeline with streaming
+                result = nlp_pipeline.process_input(
+                    user_text, 
+                    session_id=session_id,
+                    history=history,
+                    stream_handler=stream_handler
+                )
+                
+                if result and "session_id" in result:
+                    return jsonify({"status": "streaming", "session_id": result["session_id"]}), 200
+                else:
+                    return jsonify({"error": "Failed to start streaming"}), 500
+            except Exception as e:
+                logger.error(f"Error in streaming NLP processing: {e}", exc_info=True)
+                return jsonify({"error": "Error processing streaming request"}), 500
+        else:
+            # Use fallback service if modules are not initialized
+            return jsonify({
+                "error": "Streaming not available in limited mode",
+                "response": "I'm sorry, streaming responses are not available right now."
+            }), 503
+        
+    except Exception as e:
+        logger.error(f"Error processing streaming text request: {e}", exc_info=True)
         error_response = "I'm sorry, I'm experiencing technical difficulties. Please try again later."
         return jsonify({"error": "Failed to process your request", "response": error_response}), 500
 
