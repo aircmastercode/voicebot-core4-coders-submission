@@ -36,3 +36,4 @@ Development tools
 .roomodes
 .windsurfrules
 venv/
+__pycache__/
