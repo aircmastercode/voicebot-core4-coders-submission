@@ -150,7 +150,47 @@ class ASRModule:
             return s3_url if s3_url else filename
         return filename
     
-    def transcribe_file(self, audio_file_path: str, s3_bucket: str, s3_key: str) -> str:
+    def transcribe_file(self, audio_file_path: str, s3_bucket: str = None, s3_key: str = None) -> str:
+        """
+        Transcribe an audio file using Amazon Transcribe or OpenAI's Whisper.
+        Args:
+            audio_file_path: Path to the audio file to transcribe.
+            s3_bucket: S3 bucket name (optional if using Whisper).
+            s3_key: S3 object key (optional if using Whisper).
+        Returns:
+            The transcribed text.
+        """
+        # If S3 parameters are provided, use Amazon Transcribe
+        if s3_bucket and s3_key:
+            return self._transcribe_with_amazon(audio_file_path, s3_bucket, s3_key)
+        else:
+            # Otherwise use OpenAI's Whisper API
+            return self._transcribe_with_whisper(audio_file_path)
+    
+    def _transcribe_with_whisper(self, audio_file_path: str) -> str:
+        """
+        Transcribe an audio file using OpenAI's Whisper API.
+        Args:
+            audio_file_path: Path to the audio file to transcribe.
+        Returns:
+            The transcribed text.
+        """
+        try:
+            with open(audio_file_path, "rb") as audio_file:
+                logger.info("Sending audio to OpenAI Whisper API for transcription")
+                response = self.openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language=self.config.language
+                )
+                transcription = response.text
+                logger.info(f"Transcription completed: '{transcription}'")
+                return transcription
+        except Exception as e:
+            logger.error(f"Error using Whisper API: {e}")
+            return ""
+    
+    def _transcribe_with_amazon(self, audio_file_path: str, s3_bucket: str, s3_key: str) -> str:
         """
         Transcribe an audio file using Amazon Transcribe.
         Args:
@@ -224,7 +264,11 @@ class ASRModule:
                 os.remove(local_temp)
                 return transcription
             else:
-                transcription = self.transcribe_file(temp_file, s3_bucket, s3_key)
+                # Pass S3 parameters only if upload_s3 is True
+                if upload_s3:
+                    transcription = self.transcribe_file(temp_file, s3_bucket, s3_key)
+                else:
+                    transcription = self.transcribe_file(temp_file)
                 return transcription
         finally:
             # Clean up temporary file if it exists locally and not uploaded to S3
