@@ -16,7 +16,7 @@ def main():
     if not api_gateway_url:
         print("ERROR: API_GATEWAY_URL environment variable not set")
         print("Please set it to your API Gateway URL")
-        print("Example: export API_GATEWAY_URL='https://abc123def.execute-api.region.amazonaws.com/dev'")
+        print("Example: export API_GATEWAY_URL='https://abc123def.execute-api.region.amazonaws.com/dev/nlp'")
         return
     
     print(f"Connecting to API Gateway: {api_gateway_url}")

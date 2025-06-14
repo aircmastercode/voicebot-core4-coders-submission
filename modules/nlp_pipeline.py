@@ -29,7 +29,7 @@ class BedrockNLPProcessor:
         # Get AWS configuration
         aws_config = get_aws_config()
         api_config = aws_config.get('api_gateway', {
-            'base_url': os.getenv('API_GATEWAY_URL', 'https://your-api-id.execute-api.us-west-2.amazonaws.com/dev'),
+            'base_url': os.getenv('API_GATEWAY_URL', 'https://your-api-id.execute-api.us-west-2.amazonaws.com/dev/nlp'),
             'api_key': os.getenv('API_GATEWAY_KEY', '')
         })
         

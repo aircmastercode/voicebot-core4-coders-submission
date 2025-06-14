@@ -22,7 +22,7 @@ def main():
     if not api_gateway_url:
         logger.error("API_GATEWAY_URL environment variable not set")
         print("Please set the API_GATEWAY_URL environment variable:")
-        print("export API_GATEWAY_URL='https://9kti499scf.execute-api.us-west-2.amazonaws.com/dev'")
+        print("export API_GATEWAY_URL='https://9kti499scf.execute-api.us-west-2.amazonaws.com/dev/nlp")
         return
     
     logger.info(f"Using API Gateway URL: {api_gateway_url}")

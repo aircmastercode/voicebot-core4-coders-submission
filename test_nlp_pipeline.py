@@ -63,6 +63,6 @@ if __name__ == "__main__":
     if not os.environ.get('API_GATEWAY_URL'):
         print("API_GATEWAY_URL environment variable not set")
         print("Please set the API_GATEWAY_URL environment variable:")
-        print("export API_GATEWAY_URL='https://your-api-id.execute-api.us-west-2.amazonaws.com/dev'")
+        print("export API_GATEWAY_URL='https://your-api-id.execute-api.us-west-2.amazonaws.com/dev/nlp'")
     else:
         main()
