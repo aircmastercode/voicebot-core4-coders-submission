@@ -224,19 +224,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error processing audio:', error);
-            addUserMessage("I tried to say something");
-            addBotMessage("I'm having trouble understanding. Could you please try typing your question instead?");
             
-            // Add to history
-            conversationHistory.push({
-                role: 'user',
-                content: "I tried to say something"
-            });
+            // Show a helpful error message
+            showError("Voice recognition is currently unavailable due to missing API keys. Please use text input mode instead.");
             
-            conversationHistory.push({
-                role: 'assistant',
-                content: "I'm having trouble understanding. Could you please try typing your question instead?"
-            });
+            // Switch to text mode automatically
+            setTimeout(() => {
+                switchToTextMode();
+            }, 1000);
             
             voiceStatusText.textContent = 'Click the microphone to speak';
             voiceWaves.classList.remove('active');

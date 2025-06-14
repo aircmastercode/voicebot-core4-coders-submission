@@ -310,15 +310,27 @@ def demo_endpoint(mode):
         })
         
     elif mode == 'speech':
-        # For speech mode, we'll use what the user actually said if available
-        # Extract audio data from request if available
-        audio_data = request.files.get('audio')
+        # For speech mode, we'll try to extract text from the form data if available
+        history_json = request.form.get('history', '[]')
         
-        # If we have audio data, try to use it
-        if audio_data:
-            # Return a message that acknowledges the user's attempt to use voice
+        try:
+            history = json.loads(history_json)
+        except json.JSONDecodeError:
+            history = []
+            
+        # Extract the last user message from history if available
+        user_query = ""
+        if history:
+            for msg in reversed(history):
+                if msg.get('role') == 'user':
+                    user_query = msg.get('content', '')
+                    break
+        
+        # If we have audio data, acknowledge it
+        if 'audio' in request.files:
+            # Return a clear message about voice recognition being unavailable
             return jsonify({
-                "text": "I heard your voice input",
+                "text": user_query or "Voice input received",
                 "response": "I'm sorry, but voice recognition is currently unavailable due to missing API keys. Please try using the text input mode instead."
             })
         else:

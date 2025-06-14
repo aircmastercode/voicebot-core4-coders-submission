@@ -54,14 +54,15 @@ def check_environment():
     
     return True
 
+# This function is no longer used as we moved the port handling to main()
+# Keeping it as a stub for backward compatibility
 def run_server(host="0.0.0.0", port=5000, debug=False):
     """Run the Flask server."""
     from server import app
-    
     logger.info(f"Starting server on {host}:{port}")
     app.run(host=host, port=port, debug=debug)
 
-def open_browser(url="http://localhost:5000", delay=1.0):
+def open_browser(url, delay=1.0):
     """Open the browser after a short delay."""
     def _open_browser():
         time.sleep(delay)
@@ -92,12 +93,40 @@ def main():
     # Create required directories
     Path("static/audio").mkdir(parents=True, exist_ok=True)
     
+    # Run the server (this will find an available port if needed)
+    from server import app
+    import socket
+    
+    # Try to find an available port if the specified one is in use
+    original_port = args.port
+    max_attempts = 10
+    attempts = 0
+    
+    while attempts < max_attempts:
+        try:
+            # Test if port is available
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((args.host, args.port))
+                break
+        except OSError:
+            attempts += 1
+            args.port += 1
+            logger.warning(f"Port {args.port-1} is in use, trying port {args.port}")
+    
+    if attempts == max_attempts:
+        logger.error(f"Could not find an available port after {max_attempts} attempts")
+        sys.exit(1)
+    
+    if args.port != original_port:
+        logger.info(f"Using port {args.port} instead of {original_port}")
+    
     # Open browser unless disabled
     if not args.no_browser:
         open_browser(f"http://localhost:{args.port}")
     
     # Run the server
-    run_server(host=args.host, port=args.port, debug=args.debug)
+    logger.info(f"Starting server on {args.host}:{args.port}")
+    app.run(host=args.host, port=args.port, debug=args.debug)
 
 if __name__ == "__main__":
     try:
@@ -105,3 +134,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Application stopped by user.")
         sys.exit(0) 
+        
