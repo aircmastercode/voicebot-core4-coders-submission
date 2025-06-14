@@ -52,7 +52,7 @@ def run_inference(input_path: str, output_path: str):
         nlp_pipeline = NLPPipeline(config=config)
         
         logger.info("Initializing Response Generator...")
-        response_generator = ResponseGenerator(config=config)
+        response_generator = ResponseGenerator()
     except (FileNotFoundError, ValueError) as e:
         logger.error(f"Failed to initialize modules: {e}")
         return
@@ -81,7 +81,7 @@ def run_inference(input_path: str, output_path: str):
             nlp_data = nlp_pipeline.process_input(question)
             
             # Step 2: Generate the final response
-            final_response = response_generator.generate_response(question, nlp_data)
+            final_response = response_generator.get_final_answer(nlp_data)
             responses.append(final_response)
         except Exception as e:
             logger.error(f"An error occurred while processing question: '{question}'. Error: {e}")

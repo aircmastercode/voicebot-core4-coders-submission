@@ -38,7 +38,7 @@ def live_demo():
         nlp_pipeline = NLPPipeline(config=config)
         
         logging.info("Initializing Response Generator...")
-        response_generator = ResponseGenerator(config=config)
+        response_generator = ResponseGenerator()
     except (FileNotFoundError, ValueError) as e:
         logging.error(f"Failed to initialize modules: {e}")
         print(f"Error: Could not start the demo. Details: {e}")
@@ -49,7 +49,8 @@ def live_demo():
     print("Ask me anything about Peer-to-Peer lending.")
     print("Type 'exit' or 'quit' to end the session.\n")
     
-    session_id = "live-demo-session" # A consistent session ID for the demo
+    session_id = "live-demo-session"
+    conversation_history = [] # List to store the conversation turns
 
     while True:
         try:
@@ -61,11 +62,21 @@ def live_demo():
             if not user_query.strip():
                 continue
 
-            # Step 1: Process input through the NLP pipeline
-            nlp_data = nlp_pipeline.process_input(user_query, session_id=session_id)
+            # Append user message to history
+            conversation_history.append({"role": "user", "content": user_query})
+
+            # The pipeline now needs the full history
+            nlp_data = nlp_pipeline.process_input(
+                user_query, 
+                session_id=session_id,
+                history=conversation_history
+            )
             
             # Step 2: Generate the final response
-            final_response = response_generator.generate_response(user_query, nlp_data)
+            final_response = response_generator.get_final_answer(nlp_data)
+
+            # Append bot message to history
+            conversation_history.append({"role": "assistant", "content": final_response})
             
             print(f"Bot: {final_response}")
 

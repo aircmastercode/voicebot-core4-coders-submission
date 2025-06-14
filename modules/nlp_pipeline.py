@@ -4,7 +4,7 @@ import os
 import yaml
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 from modules.api_client import APIClient
@@ -54,7 +54,7 @@ class NLPPipeline:
         )
         logger.info("NLP Pipeline initialized successfully.")
 
-    def process_input(self, text: str, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def process_input(self, text: str, session_id: Optional[str] = None, history: Optional[List[Dict[str, str]]] = None) -> Optional[Dict[str, Any]]:
         """
         Processes user input by calling the backend NLP service.
 
@@ -66,6 +66,7 @@ class NLPPipeline:
         Args:
             text: The user's input text.
             session_id: An optional session ID for maintaining context.
+            history: An optional list of previous conversation history.
 
         Returns:
             A dictionary with the structured NLP output from the backend,
@@ -78,7 +79,8 @@ class NLPPipeline:
         payload = {
             "operation": "generate_response",
             "text": text,
-            "session_id": session_id
+            "session_id": session_id,
+            "history": history or [] # Pass the conversation history
         }
 
         logger.info(f"Sending text to NLP backend with payload: {json.dumps(payload, indent=2)}")
