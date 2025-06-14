@@ -25,14 +25,14 @@ node_modules/
 .DS_Store
 
 # Task files
-tasks.json
-tasks/ 
+# tasks.json
+# tasks/ 
 
-Development tools
-.roo
-.cursor
-.taskmaster
-.env.example
-.roomodes
-.windsurfrules
+# Development tools
+# .roo
+# .cursor
+# .taskmaster
+# .env.example
+# .roomodes
+# .windsurfrules
 

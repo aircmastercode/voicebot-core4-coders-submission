@@ -141,20 +141,29 @@ class BedrockNLPProcessor:
         Returns:
             Dictionary of extracted entities
         """
-        # For P2P lending, we're interested in entities like:
-        # - Currency amounts
-        # - Time periods (loan duration)
         try:
             # Call the API Gateway endpoint for entity extraction
-            self.logger.info(f"Calling API for entity extraction: {text[:50]}...")
-            response = self.api_client.extract_entities(text, intent)
+            self.logger.info(f"Calling API for entity extraction: {user_input[:50]}...")
+            
+            # Use the API client to extract entities
+            response = self.api_client.extract_entities(text=user_input, intent=intent)
             
             # Check for errors in the API response
             if response.get('error'):
                 self.logger.error(f"API error: {response.get('message')}")
                 return {}
             
-            # Return the extracted entities
+            # Parse the response body if it's a string (JSON)
+            if 'body' in response and isinstance(response['body'], str):
+                try:
+                    response_data = json.loads(response['body'])
+                    entities = response_data.get('entities', {})
+                    return entities
+                except json.JSONDecodeError:
+                    self.logger.error("Failed to parse entity extraction response as JSON")
+                    return {}
+            
+            # If the response already contains entities directly
             return response.get('entities', {})
             
         except Exception as e:
@@ -176,12 +185,32 @@ class BedrockNLPProcessor:
             self.logger.info(f"Calling API for knowledge base query: {query[:50]}...")
             response = self.api_client.query_knowledge_base(query, max_results)
             
+            # Debug: Log the raw response structure
+            self.logger.info(f"Knowledge base response type: {type(response)}, keys: {list(response.keys()) if isinstance(response, dict) else 'N/A'}")
+            
             # Check for errors in the API response
             if response.get('error'):
                 self.logger.error(f"API error: {response.get('message')}")
                 return []
             
-            # Return the knowledge base results
+            # Parse the response body if it's a string (JSON)
+            if 'body' in response and isinstance(response['body'], str):
+                try:
+                    self.logger.info(f"Parsing response body: {response['body'][:200]}...")
+                    response_data = json.loads(response['body'])
+                    self.logger.info(f"Parsed response data keys: {list(response_data.keys())}")
+                    
+                    if 'results' in response_data:
+                        self.logger.info(f"Found results: {response_data['results'][:2]}")
+                        return response_data['results']
+                    else:
+                        self.logger.warning(f"No 'results' key found in knowledge base response. Keys: {list(response_data.keys())}")
+                        return []
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"Failed to parse knowledge base response as JSON: {str(e)}")
+                    return []
+            
+            # If the response already contains results directly
             return response.get('results', [])
             
         except Exception as e:
@@ -190,7 +219,7 @@ class BedrockNLPProcessor:
     
     def generate_response(self, user_input: str, intent_data: Dict[str, Any], 
                          session_id: Optional[str] = None) -> str:
-        """Generate a response using API Gateway and Lambda.
+        """Generate a response using API Gateway and Lambda with hybrid knowledge base + LLM approach.
         
         Args:
             user_input: The user's query text
@@ -210,14 +239,28 @@ class BedrockNLPProcessor:
             self.logger.info(f"Calling API for response generation: {user_input[:50]}...")
             
             # First query knowledge base for context
+            self.logger.info("Querying knowledge base for relevant context...")
             kb_results = self.query_knowledge_base(user_input)
             
-            # Then generate response using the API client
+            # Extract content from knowledge base results
+            knowledge_context = []
+            if kb_results and isinstance(kb_results, list):
+                self.logger.info(f"Found {len(kb_results)} relevant knowledge base items")
+                for result in kb_results:
+                    if 'content' in result and result['content']:
+                        # Add source attribution to the content
+                        source = result.get('source', 'Unknown')
+                        content = result.get('content', '')
+                        knowledge_context.append(f"{content}\n(Source: {source})")
+            else:
+                self.logger.info("No relevant knowledge base items found")
+            
+            # Then generate response using the API client with knowledge context
+            self.logger.info("Generating response with knowledge context...")
             response = self.api_client.generate_response(
-                text=user_input,
-                intent=intent_data.get('intent', 'general_inquiry'),
-                entities=intent_data.get('entities', {}),
-                knowledge_results=kb_results,
+                query=user_input,
+                knowledge_items=knowledge_context,
+                conversation_history=history,
                 session_id=session_id
             )
             
@@ -250,9 +293,12 @@ if __name__ == "__main__":
     # Initialize processor with default AWS workshop configuration
     processor = BedrockNLPProcessor()
     
-    # Log the configuration being used
-    logger.info(f"Using AWS region: {processor.region_name}")
-    logger.info(f"Using Bedrock model: {processor.foundation_model_id}")
+    # Log the API Gateway configuration being used
+    api_config = get_aws_config().get('api_gateway', {})
+    logger.info(f"Using API Gateway URL: {api_config.get('base_url', 'Not configured')}")
+    logger.info(f"Using API Gateway stage: {api_config.get('stage', 'dev')}")
+    logger.info(f"API Key configured: {'Yes' if api_config.get('api_key') else 'No'}")
+    logger.info(f"AWS region: {get_aws_config().get('aws', {}).get('region_name', 'us-west-2')}")
     
     try:
         # Test intent recognition
@@ -260,26 +306,51 @@ if __name__ == "__main__":
         result = processor.recognize_intent("What are the current interest rates for P2P lending?")
         print(f"Intent: {result['intent']}")
         print(f"Confidence: {result['confidence']}")
-        print(f"Entities: {result['entities']}")
+        if 'entities' in result:
+            print(f"Entities: {result['entities']}")
+        else:
+            print("No entities in result")
         
         # Test entity extraction
         logger.info("Testing entity extraction...")
         entities = processor.extract_entities("I want to invest 50,000 rupees for 6 months at 12% interest rate")
         print(f"Extracted entities: {entities}")
         
-        # Test knowledge base query if configured
-        if processor.knowledge_base_id:
-            logger.info("Testing knowledge base query...")
-            kb_results = processor.query_knowledge_base("P2P lending regulations in India")
+        # Test knowledge base query
+        logger.info("Testing knowledge base query...")
+        kb_results = processor.query_knowledge_base("P2P lending regulations in India")
+        
+        if kb_results and isinstance(kb_results, list):
+            logger.info(f"Found {len(kb_results)} knowledge base results")
             for result in kb_results:
-                print(f"Source: {result['source']}")
-                print(f"Text: {result['text'][:100]}...")
-                print(f"Relevance: {result['relevance_score']}")
+                print(f"Source: {result.get('source', 'Unknown')}")
+                print(f"Content: {result.get('content', '')[:100]}...")
+                print(f"Score: {result.get('score', 0)}")
                 print("---")
         else:
-            logger.warning("Knowledge base ID not configured, skipping knowledge base test")
+            print("No knowledge base results returned or invalid format.")
+            logger.warning(f"KB results type: {type(kb_results)}, value: {kb_results}")
+            
+        # Test hybrid response generation
+        logger.info("\n\nTesting hybrid response generation...")
+        print("\nUser query: What are the regulations for P2P lending in India?")
+        
+        # Get intent data
+        intent_data = processor.recognize_intent("What are the regulations for P2P lending in India?")
+        
+        # Generate response with hybrid approach
+        response = processor.generate_response(
+            user_input="What are the regulations for P2P lending in India?",
+            intent_data=intent_data,
+            session_id="test-session-123"
+        )
+        
+        print("\nGenerated response:")
+        print(f"{response}\n")
+        print("---"*20)
             
     except Exception as e:
         logger.error(f"Error during testing: {e}")
-        print("To use this module, you need to configure Bedrock resources in the AWS console")
-        print("or update the config/aws_config.py file with your resource IDs.")
+        print("To use this module, you need to configure the API Gateway URL and API key")
+        print("in your .env file or update the config/aws_config.py file with your API Gateway settings.")
+        print(f"Error details: {str(e)}")

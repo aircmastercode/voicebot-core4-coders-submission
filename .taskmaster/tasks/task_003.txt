@@ -1,0 +1,58 @@
+# Task ID: 3
+# Title: Set up API Gateway for Lambda Integration
+# Status: pending
+# Dependencies: 2
+# Priority: high
+# Description: Create and configure an API Gateway to expose the Lambda function as a REST API endpoint.
+# Details:
+1. Create a new REST API in API Gateway
+2. Set up a single /nlp resource with a POST method
+3. Integrate the Lambda function as the backend
+4. Configure request/response mapping templates:
+   - Request template: application/json
+   - Response template: application/json
+5. Enable CORS if necessary
+6. Implement API key security (optional)
+7. Deploy the API to a stage (e.g., 'dev', 'prod')
+8. Note the invoke URL for client integration
+
+# Test Strategy:
+Test the API endpoint using Postman or curl, verifying correct request handling, Lambda invocation, and response formatting. Test with and without API key if implemented.
+
+# Subtasks:
+## 1. Create REST API in API Gateway [pending]
+### Dependencies: None
+### Description: Set up a new REST API in Amazon API Gateway
+### Details:
+Log into AWS Console, navigate to API Gateway, create a new REST API, set name and description, choose endpoint type (regional/edge-optimized/private)
+
+## 2. Configure resources and methods [pending]
+### Dependencies: 3.1
+### Description: Define API resources and HTTP methods
+### Details:
+Create resources (e.g., /users, /orders), set up HTTP methods (GET, POST, PUT, DELETE) for each resource, configure method request settings
+
+## 3. Integrate Lambda functions [pending]
+### Dependencies: 3.2
+### Description: Connect API methods to corresponding Lambda functions
+### Details:
+For each method, set up Lambda integration, specify Lambda function ARN, configure integration request settings, set up test invocations
+
+## 4. Create mapping templates [pending]
+### Dependencies: 3.3
+### Description: Set up request/response mapping templates for data transformation
+### Details:
+Create input mapping templates to transform incoming requests, set up output mapping templates to format Lambda responses, test mappings
+
+## 5. Implement security measures [pending]
+### Dependencies: 3.2
+### Description: Set up API keys and usage plans for access control
+### Details:
+Generate API keys, create usage plans with throttling and quota limits, associate API stages with usage plans, link API keys to usage plans
+
+## 6. Deploy API and create documentation [pending]
+### Dependencies: 3.4, 3.5
+### Description: Deploy the API to a stage and generate API documentation
+### Details:
+Create a new deployment stage, deploy API to the stage, use API Gateway's documentation feature to generate SDK and API reference documentation
+

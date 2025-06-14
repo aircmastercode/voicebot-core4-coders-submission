@@ -142,17 +142,17 @@ class P2PLendingAPIClient:
         Returns:
             Dictionary containing the generated response
         """
+        # Format the payload according to the API specification as shown in the screenshot
         payload = {
             'operation': 'generate_response',
             'text': query,
-            'session_id': session_id
+            'context': "Add the context here.",
+            'session_id': session_id or 'test-session-123'
         }
         
-        # Format context from knowledge items if provided
-        if knowledge_items:
-            payload['context'] = '\n'.join(knowledge_items)
-        else:
-            payload['context'] = ''
+        # Add context from knowledge base if available
+        if knowledge_items and len(knowledge_items) > 0:
+            payload['context'] = "\n\n".join(knowledge_items)
         
         return self._make_request('nlp', method='POST', data=payload)
     

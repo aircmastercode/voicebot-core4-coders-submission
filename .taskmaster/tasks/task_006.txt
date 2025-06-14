@@ -1,0 +1,18 @@
+# Task ID: 6
+# Title: Develop NLP Pipeline
+# Status: pending
+# Dependencies: 2, 4
+# Priority: high
+# Description: Create an NLP pipeline for intent recognition, entity extraction, and context management.
+# Details:
+1. Use the spaCy library (version 3.5.0 or later) for core NLP tasks
+2. Implement custom intent recognition using a fine-tuned BERT model
+3. Use Named Entity Recognition (NER) for entity extraction
+4. Implement context management using a sliding window approach
+5. Integrate with the API client for Bedrock services
+6. Implement coreference resolution for improved context understanding
+7. Add support for multiple languages (English, Hindi, Hinglish)
+8. Optimize for near-zero latency
+
+# Test Strategy:
+Create a test suite with various conversational scenarios, test intent recognition accuracy, entity extraction precision, and context retention across multiple turns. Benchmark latency and optimize as needed.

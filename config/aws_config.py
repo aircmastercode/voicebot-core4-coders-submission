@@ -6,15 +6,13 @@ This file contains configuration for AWS services including Bedrock.
 import os
 from dotenv import load_dotenv
 
-# Import Bedrock resource IDs
-from config.bedrock_resources import get_bedrock_resources
-
 # Load environment variables from .env file if it exists
 load_dotenv()
 
-def get_aws_config():
+# Define the AWS configuration as a function first
+def _create_aws_config():
     """
-    Get AWS configuration for the application.
+    Create AWS configuration for the application.
     
     Uses the default AWS credential provider chain, which will automatically
     use credentials from environment variables, AWS config file, or EC2/ECS
@@ -30,10 +28,7 @@ def get_aws_config():
             'region_name': os.getenv('AWS_REGION', 'us-west-2')
         },
         
-        # Bedrock resources
-        'bedrock': get_bedrock_resources(),
-        
-        # S3 configuration
+        # S3 configuration (optional)
         's3': {
             'bucket_name': os.getenv('S3_BUCKET_NAME', ''),
             'knowledge_base_prefix': os.getenv('S3_KB_PREFIX', 'knowledge-base/')
@@ -51,6 +46,9 @@ def get_aws_config():
             'cache_ttl': int(os.getenv('CACHE_TTL', '3600'))
         }
     }
+
+# Create the global AWS_CONFIG variable
+AWS_CONFIG = _create_aws_config()
 
 # Workshop-specific configuration
 WORKSHOP_CONFIG = {
