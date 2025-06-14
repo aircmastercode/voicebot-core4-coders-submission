@@ -420,3 +420,56 @@ main {
         margin-left: 10px;
     }
 } 
+/* Micro animation for send/mic button */
+.mic-btn, #send-btn {
+    transition: transform 0.15s cubic-bezier(.4,0,.2,1), box-shadow 0.2s;
+}
+.mic-btn:active, #send-btn:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(44,107,237,0.13);
+}
+
+/* Loader (dots) animation */
+.loader {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 10px;
+}
+.loader-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 2px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    opacity: 0.75;
+    animation: loader-bounce 1s infinite alternate;
+}
+.loader-dot:nth-child(2) { animation-delay: 0.2s; }
+.loader-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes loader-bounce {
+    0% { transform: translateY(0); opacity: 0.75; }
+    100% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* Response time badge */
+.response-time {
+    display: inline-block;
+    background: var(--secondary-color);
+    color: var(--primary-color);
+    border-radius: 12px;
+    font-size: 11px;
+    padding: 2px 8px;
+    margin-left: 8px;
+    margin-top: 4px;
+    font-weight: 500;
+    vertical-align: middle;
+    box-shadow: 0 1px 2px rgba(44,107,237,0.06);
+}
+
+/* Mature, subtle chat bubble hover */
+.message-content:hover {
+    background-color: #f1f3f4;
+    transition: background 0.2s;
+}
