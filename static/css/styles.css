@@ -16,6 +16,12 @@
   --user-message-bg: #e8f0fe;
   --system-message-bg: #fef7e0;
   --animation-speed: 0.3s;
+  --typing-cursor-color: #4285f4;
+  --typing-cursor-width: 0.15rem;
+  --typing-indicator-fade: 200ms;
+  --typing-indicator-color: var(--primary-color);
+  --cursor-blink-speed: 1s;
+  --cursor-pause-color: #fbbc05;
 }
 
 * {
@@ -149,25 +155,75 @@ main {
   max-width: 60%;
 }
 
-/* Streaming text animation */
+/* Enhanced Streaming text animation */
 @keyframes blink {
   0% { opacity: 0.2; }
   20% { opacity: 1; }
   100% { opacity: 0.2; }
 }
 
+@keyframes pausedBlink {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
 .streaming-text {
   display: inline;
+  position: relative;
+}
+
+.streaming-text.active-streaming {
+  min-height: 1.5rem;
 }
 
 .cursor {
   display: inline-block;
-  width: 0.5rem;
+  width: var(--typing-cursor-width);
   height: 1rem;
-  background-color: var(--primary-color);
-  animation: blink 1s infinite;
+  background-color: var(--typing-cursor-color);
+  animation: blink var(--cursor-blink-speed) infinite;
   margin-left: 0.2rem;
   vertical-align: middle;
+}
+
+.cursor.paused {
+  background-color: var(--cursor-pause-color);
+  animation: pausedBlink 0.5s infinite;
+  width: calc(var(--typing-cursor-width) * 1.2);
+}
+
+/* Enhanced typing animation */
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+.message.bot .streaming-text.active-streaming {
+  display: inline-block;
+  overflow: hidden;
+  white-space: normal;
+  animation: fadeIn 0.1s;
+}
+
+/* Natural typing rhythm */
+.message.bot .streaming-text.active-streaming p {
+  transition: color 0.2s ease;
+}
+
+/* Immediate response styling */
+.message.bot .streaming-text.active-streaming p:first-child {
+  position: relative;
+}
+
+/* Batch animation for paragraph transitions */
+@keyframes paragraphFadeIn {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+.message.bot .streaming-text.active-streaming p:last-child {
+  animation: paragraphFadeIn 0.5s;
 }
 
 /* Input area */
@@ -350,12 +406,34 @@ main {
   color: var(--secondary-color);
 }
 
-/* Typing indicator */
+/* Optimized Typing indicator */
 .typing-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0.5rem 0;
+  opacity: 1;
+  animation: fadeIn 0.2s;
+  flex-direction: column;
+}
+
+/* Typing indicator visibility transitions */
+.typing-visible .typing-indicator {
+  opacity: 1;
+  transition: opacity var(--typing-indicator-fade) ease-in;
+}
+
+.typing-hidden .typing-indicator {
+  opacity: 0;
+  transition: opacity var(--typing-indicator-fade) ease-out;
+}
+
+.typing-indicator .typing-text {
+  font-size: 0.9rem;
+  color: var(--typing-indicator-color);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.02rem;
 }
 
 .typing-indicator span {
@@ -363,7 +441,7 @@ main {
   width: 0.5rem;
   height: 0.5rem;
   margin: 0 0.1rem;
-  background-color: var(--text-light);
+  background-color: var(--typing-indicator-color);
   border-radius: 50%;
   animation: bounce 1.5s infinite ease-in-out;
 }
@@ -463,8 +541,13 @@ main {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(1rem); }
+  from { opacity: 0; transform: translateY(0.5rem); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Faster animations for immediate response */
+.message.bot {
+  animation-duration: 0.15s;
 }
 
 /* Responsive design */
