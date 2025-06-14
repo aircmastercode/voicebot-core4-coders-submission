@@ -9,14 +9,22 @@ A state-of-the-art voice AI assistant designed to educate potential users about 
 - **Contextual Memory**: Remembers conversation history for cohesive interactions
 - **P2P Lending Knowledge**: Extensive knowledge base about P2P lending concepts
 - **Empathetic Responses**: Human-like responses with discourse markers and natural transitions
+- **Web Interface**: Modern, intuitive web UI for both voice and text interactions
 
 ## Project Structure
 
 ```
 voicebot_submission/
-├── main.py                 # Main entry point for the live demo
+├── main.py                 # Main entry point for the CLI demo
+├── server.py               # Flask web server for the web interface
+├── start_web.py            # Starter script for the web application
 ├── run_inference.py        # Script for Round 1 evaluation
 ├── requirements.txt        # Python dependencies
+├── static/                 # Web frontend assets
+│   ├── index.html          # Main web interface
+│   ├── css/                # CSS styles
+│   ├── js/                 # JavaScript files
+│   └── audio/              # Generated audio files (created at runtime)
 ├── config/
 │   └── config.yaml         # Configuration settings
 ├── modules/
@@ -24,6 +32,7 @@ voicebot_submission/
 │   ├── tts_module.py       # Text-to-Speech module
 │   ├── nlp_pipeline.py     # NLP processing pipeline
 │   ├── response_gen.py     # Response generation module
+│   ├── fallback_service.py # Fallback service for handling errors
 │   ├── api_client.py       # API client for AWS services
 │   └── utils.py            # Utility functions
 ├── data/
@@ -64,18 +73,30 @@ API_GATEWAY_KEY=your-api-gateway-key
 OPENAI_API_KEY=your-openai-api-key
 ```
 
-### 3. Knowledge Base Setup
-
-The system uses an AWS Bedrock Knowledge Base through the Lambda function. The Lambda function should be configured with:
-- Knowledge base ID
-- AWS region
-- S3 bucket for storing conversation history
+You can also run `python start_web.py` which will create a `.env` file from the template if it doesn't exist.
 
 ## Running the Application
 
-### Live Demo
+### Web Interface (Recommended)
 
-Run the main application with voice interaction:
+Run the web application:
+```
+python start_web.py
+```
+
+This will:
+1. Start a Flask web server on http://localhost:5000
+2. Open your default browser to the web interface
+3. Allow you to interact with the assistant using either voice or text
+
+Options:
+- `--port PORT`: Specify a different port (default: 5000)
+- `--no-browser`: Don't automatically open the browser
+- `--debug`: Run in debug mode
+
+### Command-Line Demo
+
+Run the command-line application with voice interaction:
 ```
 python main.py --mode voice
 ```
@@ -92,13 +113,20 @@ Run the inference script on test data:
 python run_inference.py --input test.csv --output submission.csv
 ```
 
-## Voice Interaction Instructions
+## Web Interface Instructions
 
-1. Start the application in voice mode
-2. The assistant will greet you and wait for your input
-3. Speak clearly when prompted
-4. You can say "exit" to end the session or "text" to switch to text mode
-5. In text mode, you can type "voice" to switch back to voice mode
+1. Open the web interface in your browser (http://localhost:5000)
+2. The assistant will greet you with a welcome message
+3. You can toggle between Voice mode and Text mode using the buttons at the top
+4. In Voice mode:
+   - Click the microphone button to start recording
+   - Speak clearly into your microphone
+   - Click the microphone again to stop recording (or it will stop automatically after 10 seconds)
+   - The assistant will process your speech and respond
+5. In Text mode:
+   - Type your message in the text input field
+   - Press Enter or click the Send button
+   - The assistant will process your text and respond
 
 ## Advanced Features
 
@@ -107,6 +135,7 @@ python run_inference.py --input test.csv --output submission.csv
 - **Graceful Error Handling**: Elegantly recovers from ambiguous requests
 - **Proactive Guidance**: Suggests next topics to explore in P2P lending
 - **Discourse Markers**: Uses natural pauses and transitions for human-like speech
+- **Fallback System**: Provides meaningful responses even when the backend is unavailable
 
 ## API Requirements
 
@@ -117,12 +146,12 @@ The application expects the following environment variables:
 
 ## Notes for Evaluators
 
-- The voice interaction can be tested with your system's microphone
-- The ASR module is configured to listen for 5 seconds by default
-- Response quality relies on both the LLM and the provided knowledge base
+- The web interface provides a much more intuitive experience than the command-line version
+- The frontend is responsive and works on both desktop and mobile devices
+- The system is designed to gracefully handle errors and connectivity issues
 - All conversation history is maintained within the session
+- The application will try to use real API services if configured, but will fall back to demo mode if they are unavailable
 
 ## Contributors
 
 Developed by Team Innovators for the AI-Humanized Voicebot Hackathon.
-hello commit_4

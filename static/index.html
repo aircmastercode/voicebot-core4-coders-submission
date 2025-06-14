@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Lending Voice AI Assistant</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-robot"></i>
+                <h1>P2P Lending Voice AI Assistant</h1>
+            </div>
+            <div class="mode-toggle">
+                <button id="voice-mode-btn" class="active"><i class="fas fa-microphone"></i> Voice</button>
+                <button id="text-mode-btn"><i class="fas fa-keyboard"></i> Text</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message bot">
+                        <div class="message-content">
+                            <p>Hello! I'm your P2P Lending Assistant. How can I help you today?</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div id="voice-input" class="voice-input">
+                    <button id="mic-btn" class="mic-btn">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <div class="voice-status">
+                        <p id="voice-status-text">Click the microphone to speak</p>
+                        <div class="voice-waves" id="voice-waves">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+                <div id="text-input" class="text-input hidden">
+                    <input type="text" id="user-input" placeholder="Type your message here...">
+                    <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </main>
+
+        <div class="status-bar">
+            <div id="connection-status" class="connected">
+                <i class="fas fa-circle"></i>
+                <span>Connected</span>
+            </div>
+            <div class="bot-status" id="bot-status">
+                <i class="fas fa-circle"></i>
+                <span>Idle</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="error-modal">
+        <div class="modal-content">
+            <h2>Error</h2>
+            <p id="error-message">An error has occurred.</p>
+            <button id="close-error-btn">Close</button>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html> 
