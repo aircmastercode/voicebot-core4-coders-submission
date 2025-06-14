@@ -128,27 +128,13 @@ class WebSocketClient:
                     if "session_id" in response and not session_id:
                         session_id = response["session_id"]
                     
-                    # If this is a response chunk, break it down into smaller chunks
+                    # If this is a response chunk, pass it directly to the stream handler
                     if "response_chunk" in response:
                         chunk_text = response["response_chunk"]
                         accumulated_response += chunk_text
                         
-                        # Break down large chunks into line-by-line pieces for deliberate streaming
-                        smaller_chunks = self._chunk_text(chunk_text)
-                        for i, small_chunk in enumerate(smaller_chunks):
-                            # Create a new response object for each smaller chunk
-                            small_response = {
-                                "response_chunk": small_chunk + "\n",  # Add newline to ensure line breaks
-                            }
-                            if session_id:
-                                small_response["session_id"] = session_id
-                            
-                            # Call the stream handler with the smaller chunk
-                            stream_handler(small_response)
-                            
-                            # Add a 1-second delay between chunks for a more deliberate line-by-line display
-                            if i < len(smaller_chunks) - 1:
-                                await asyncio.sleep(1.0)  # 1-second delay between lines
+                        # Pass the chunk directly to the stream handler immediately
+                        stream_handler(response)
                     else:
                         # For complete responses or errors, pass them through as is
                         

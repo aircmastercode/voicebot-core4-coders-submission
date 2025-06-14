@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('WebSocket message received:', data);
             
             // Check if this is a streaming response chunk
-            if (data.response_chunk) {
+            if (data.response_chunk !== undefined) {
                 // Remove the standalone typing indicator when we start receiving chunks
                 removeTypingIndicator();
                 
@@ -126,11 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentStreamingMessage.innerHTML = `
                         <div class="message-content">
                             <div id="streaming-message"></div>
-                            <div class="typing-indicator">
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                            </div>
                         </div>
                     `;
                     chatMessages.appendChild(currentStreamingMessage);
@@ -146,20 +141,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newChunk = data.response_chunk;
                 accumulatedResponse += newChunk;
                 
-                // Update the message content with a line-by-line animation effect
+                // Update the message content immediately with the new chunk
                 const streamingMessageElement = currentStreamingMessage.querySelector('#streaming-message');
                 
-                // Create a new line element for this chunk
-                if (newChunk.trim()) {
-                    const lineElement = document.createElement('p');
-                    lineElement.className = 'line-element animating';
-                    lineElement.innerHTML = formatBotResponse(newChunk);
-                    streamingMessageElement.appendChild(lineElement);
-                    
-                    // Remove animation class after animation completes
-                    setTimeout(() => {
-                        lineElement.classList.remove('animating');
-                    }, 500);
+                // Display the chunk immediately
+                if (streamingMessageElement.innerHTML === '') {
+                    // First chunk
+                    streamingMessageElement.innerHTML = formatBotResponse(newChunk);
+                } else {
+                    // Append to existing content
+                    streamingMessageElement.innerHTML = formatBotResponse(accumulatedResponse);
                 }
                 
                 // Scroll to the bottom as new content arrives
@@ -178,12 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // If we were in streaming mode, finalize the streaming message
                 if (currentStreamingMessage) {
-                    // Remove the typing indicator
-                    const typingIndicator = currentStreamingMessage.querySelector('.typing-indicator');
-                    if (typingIndicator) {
-                        typingIndicator.remove();
-                    }
-                    
                     // Add the complete response to conversation history
                     conversationHistory.push({
                         role: 'assistant',
@@ -203,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateBotStatus('idle');
                     }
                 } else {
-                    // Display the assistant's response as a new message
+                    // Display the assistant's response as a new message immediately
                     addBotMessage(data.response);
                     
                     // Add to conversation history

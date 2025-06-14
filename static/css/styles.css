@@ -518,4 +518,13 @@ main {
     .voice-status {
         margin-left: 10px;
     }
+}
+
+/* Animation for streaming text */
+.line-element.animating {
+    opacity: 1;
+}
+
+.highlight-text {
+    background-color: transparent;
 } 
