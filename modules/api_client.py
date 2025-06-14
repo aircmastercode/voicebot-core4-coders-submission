@@ -142,17 +142,22 @@ class P2PLendingAPIClient:
         Returns:
             Dictionary containing the generated response
         """
-        # Format the payload according to the API specification as shown in the screenshot
+        # Format the payload exactly as shown in the screenshot
         payload = {
-            'operation': 'generate_response',
-            'text': query,
-            'context': "Add the context here.",
-            'session_id': session_id or 'test-session-123'
+            "operation": "generate_response",
+            "text": "What are the risks of P2P lending?",
+            "context": "Add the context here.",
+            "session_id": "test-session-123"
         }
         
+        # Override with actual query and session
+        payload["text"] = query
+        if session_id:
+            payload["session_id"] = session_id
+            
         # Add context from knowledge base if available
         if knowledge_items and len(knowledge_items) > 0:
-            payload['context'] = "\n\n".join(knowledge_items)
+            payload["context"] = "\n\n".join(knowledge_items)
         
         return self._make_request('nlp', method='POST', data=payload)
     
