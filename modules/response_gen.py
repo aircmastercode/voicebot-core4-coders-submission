@@ -2,6 +2,7 @@
 
 import logging
 from typing import Dict, Any, Optional
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,19 @@ class ResponseGenerator:
             logger.warning("NLP data is empty. Returning a fallback response.")
             return "I'm sorry, I'm having trouble understanding. Could you please rephrase?"
 
+        # Check for error responses from the API
+        if "statusCode" in nlp_data and nlp_data["statusCode"] != 200:
+            if "body" in nlp_data and isinstance(nlp_data["body"], str):
+                try:
+                    body_data = json.loads(nlp_data["body"])
+                    if "error" in body_data:
+                        logger.error(f"Backend API error: {body_data['error']}")
+                        return f"I'm sorry, I'm experiencing a technical issue. {body_data.get('error_description', 'Please try again later.')}"
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse error body: {nlp_data['body']}")
+            
+            return "I'm sorry, I'm experiencing a technical issue right now. Please try again later."
+
         # The backend response might have the final answer in a 'response' key
         # or it could be nested inside a JSON string in the 'body'.
         
@@ -35,10 +49,12 @@ class ResponseGenerator:
             
         if "body" in nlp_data and isinstance(nlp_data["body"], str):
             try:
-                import json
                 body_data = json.loads(nlp_data["body"])
                 if "response" in body_data:
                     return body_data["response"]
+                elif "error" in body_data:
+                    logger.error(f"Error in body: {body_data['error']}")
+                    return f"I'm sorry, I'm experiencing a technical issue. {body_data.get('error_description', 'Please try again later.')}"
             except json.JSONDecodeError:
                 logger.error("Failed to parse the 'body' string as JSON.")
                 

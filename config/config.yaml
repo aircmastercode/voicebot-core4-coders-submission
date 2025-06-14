@@ -32,8 +32,21 @@ api_gateway:
 # ASR (Automatic Speech Recognition) Configuration
 # ==============================================================================
 asr:
-  model: "whisper-1" # Example model, can be updated as needed
-  language: "en"
+  model: "whisper-1" # OpenAI's Whisper model for speech recognition
+  language: "en"     # Default language
+  sample_rate: 16000 # Sample rate in Hz, 16kHz is optimal for Whisper
+  silence_threshold: 0.03  # For silence detection
+  continuous_mode: true    # Whether to use continuous listening mode
+
+# ==============================================================================
+# TTS (Text-to-Speech) Configuration
+# ==============================================================================
+tts:
+  model: "tts-1"        # OpenAI's TTS model (options: tts-1, tts-1-hd)
+  voice: "nova"         # Voice to use (options: alloy, echo, fable, onyx, nova, shimmer)
+  output_format: "mp3"  # Output format
+  speed: 1.0            # Speed multiplier (0.25 - 4.0)
+  add_discourse_markers: true  # Add natural discourse markers like pauses and filler words
 
 # ==============================================================================
 # Logging Configuration
