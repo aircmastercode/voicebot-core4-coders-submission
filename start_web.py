@@ -45,7 +45,7 @@ def check_environment():
     load_dotenv()
     
     # Check for required API keys
-    required_vars = ["OPENAI_API_KEY", "API_GATEWAY_URL", "API_GATEWAY_KEY"]
+    required_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"]
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     
     if missing_vars:

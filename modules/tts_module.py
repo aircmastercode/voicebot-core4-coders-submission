@@ -97,7 +97,7 @@ class TTSModule:
 
     def text_to_speech(self, text: str, output_file: Optional[str] = None, upload_s3: bool = False, s3_bucket: Optional[str] = None, s3_key: Optional[str] = None) -> str:
         """
-        Convert text to speech and save to a file. Optionally upload to S3.
+        Convert text to speech using Amazon Polly and save to a file. Optionally upload to S3.
         Args:
             text: Text to convert to speech
             output_file: Path to save the audio file. If None, a temporary file is created.
@@ -107,21 +107,22 @@ class TTSModule:
         Returns:
             The path to the generated audio file, or S3 URL if uploaded.
         """
+        polly_client = boto3.client('polly', region_name=os.getenv('AWS_REGION'))
         if not text:
             logger.warning("Empty text provided for TTS")
             return ""
         if output_file is None:
-            fd, output_file = tempfile.mkstemp(suffix=f".{self.config.output_format}")
+            fd, output_file = tempfile.mkstemp(suffix=".mp3")
             os.close(fd)
         try:
-            logger.info(f"Converting text to speech: '{text[:50]}...'")
-            response = self.openai_client.audio.speech.create(
-                model=self.config.model,
-                voice=self.config.voice,
-                input=text,
-                speed=self.config.speed
+            logger.info(f"Converting text to speech with Polly: '{text[:50]}...'")
+            response = polly_client.synthesize_speech(
+                Text=text,
+                OutputFormat='mp3',
+                VoiceId='Joanna'  # You can make this configurable
             )
-            response.stream_to_file(output_file)
+            with open(output_file, 'wb') as f:
+                f.write(response['AudioStream'].read())
             logger.info(f"Audio saved to {output_file}")
             if upload_s3 and s3_bucket and s3_key:
                 s3_url = self.upload_to_s3(output_file, s3_bucket, s3_key)
