@@ -5,10 +5,7 @@ from typing import AsyncGenerator, Callable, Optional
 
 from dotenv import load_dotenv
 import yaml
-import requests
 from pathlib import Path
-
-from modules.eleven_ws import ElevenLabsWebSocketClient
 
 # Load environment variables
 load_dotenv()
@@ -17,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 class ASRConfig:
     """Configuration for the ASR module, loaded from config.yaml."""
-    def __init__(self, model_id: str = "scribe_v1", languages: list = None): # ElevenLabs STT model
-        self.model_id = model_id
-        self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
+    def __init__(self, languages: list = None):
         self.languages = languages or ["en", "hi"]  # Default to English and Hindi
 
     @classmethod
@@ -30,7 +25,6 @@ class ASRConfig:
                 config = yaml.safe_load(f)
             asr_config = config.get("asr", {})
             return cls(
-                model_id=asr_config.get("model_id", "scribe_v1"),
                 languages=asr_config.get("languages", ["en", "hi"])
             )
         except FileNotFoundError:
@@ -39,69 +33,40 @@ class ASRConfig:
 
 class ASRModule:
     """
-    Handles Speech-to-Text (ASR) conversion using ElevenLabs streaming API.
+    Handles Speech-to-Text (ASR) conversion (frontend implementation).
+    This is now a mock implementation since speech recognition is handled in the frontend.
     """
     def __init__(self, config: ASRConfig):
         self.config = config
-        self.elevenlabs_client = ElevenLabsWebSocketClient(
-            api_key=self.config.elevenlabs_api_key,
-            model_id=self.config.model_id
-        )
-        # Set supported languages
-        self.elevenlabs_client.supported_languages = self.config.languages
-        logger.info(f"ASR Module initialized successfully with ElevenLabs. Languages: {', '.join(self.config.languages)}")
+
+        logger.info(f"ASR Module initialized successfully. Languages: {', '.join(self.config.languages)}")
 
     async def stream_speech_to_text(self, audio_stream: AsyncGenerator[bytes, None], on_transcription: Callable[[str], None]):
         """
-        Streams audio to ElevenLabs for STT and calls a callback with transcriptions.
+        Mock implementation since speech recognition is now handled in the frontend.
         Args:
             audio_stream: An async generator yielding audio chunks (bytes).
             on_transcription: A callback function to be called with each transcription update.
         """
-        logger.info("Starting ElevenLabs STT streaming.")
-        await self.elevenlabs_client.stream_stt(audio_stream, on_transcription)
+        logger.info("ASR is now handled in the frontend. This is a mock implementation.")
+        # Just consume the audio stream to avoid hanging
+        full_audio_data = b''
+        async for chunk in audio_stream:
+            full_audio_data += chunk
+
+        # Call the callback with an empty string or a message
+        on_transcription("Speech recognition is now handled in the frontend.")
         
     def transcribe_file(self, file_path: str) -> str:
         """
-        Transcribes an audio file to text.
+        Mock implementation for transcribing an audio file to text.
         Args:
             file_path: Path to the audio file.
         Returns:
-            The transcribed text.
+            A message indicating that transcription is now handled in the frontend.
         """
-        logger.info(f"Transcribing file: {file_path}")
-        try:
-            # Use the REST API approach since it's working more reliably
-            # ElevenLabs STT REST API endpoint
-            url = "https://api.elevenlabs.io/v1/speech-to-text"
-            
-            headers = {
-                "xi-api-key": self.config.elevenlabs_api_key,
-                "Accept": "application/json"
-            }
-            
-            # Include model_id in request body using multipart/form-data
-            with open(file_path, "rb") as audio_file:
-                files = {"file": (Path(file_path).name, audio_file, "audio/wav")}
-                data = {
-                    "model_id": self.config.model_id,
-                    "language": "auto",  # Auto-detect language
-                    "languages": self.config.languages
-                }
-                response = requests.post(url, headers=headers, data=data, files=files)
-            
-            if response.status_code == 200:
-                result = response.json()
-                transcription = result.get("text", "")
-                logger.info(f"Received transcription: {transcription}")
-                return transcription
-            else:
-                logger.error(f"Error from ElevenLabs API: {response.status_code} - {response.text}")
-                return ""
-                
-        except Exception as e:
-            logger.error(f"Error transcribing file: {e}")
-            return ""
+        logger.info(f"Mock transcription for file: {file_path}")
+        return "Speech recognition is now handled in the frontend."
 
 # Example Usage
 async def main():

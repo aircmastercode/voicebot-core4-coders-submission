@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 import yaml
 import uuid
 
-from modules.eleven_ws import ElevenLabsWebSocketClient
-
 # Load environment variables
 load_dotenv()
 
@@ -17,13 +15,10 @@ logger = logging.getLogger(__name__)
 class TTSConfig:
     """Configuration for the TTS module, loaded from config.yaml."""
     
-    def __init__(self, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_v3", output_format: str = "mp3", speed: float = 1.0, languages: list = None):
+    def __init__(self, output_format: str = "mp3", speed: float = 1.0, languages: list = None):
         """Initialize TTS configuration with default values."""
-        self.voice_id = voice_id
-        self.model_id = model_id
-        self.output_format = output_format # Note: ElevenLabs streaming always returns PCM, this might be for file saving
-        self.speed = speed # This might not be directly used by streaming API, but can be for post-processing
-        self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
+        self.output_format = output_format
+        self.speed = speed
         self.languages = languages or ["en", "hi"]  # Default to English and Hindi
         
     @classmethod
@@ -35,8 +30,6 @@ class TTSConfig:
                 
             tts_config = config.get("tts", {})
             return cls(
-                voice_id=tts_config.get("voice_id", "EXAVITQu4vr4xnSDxMaL"),
-                model_id=tts_config.get("model_id", "eleven_v3"),
                 output_format=tts_config.get("output_format", "mp3"),
                 speed=tts_config.get("speed", 1.0),
                 languages=tts_config.get("languages", ["en", "hi"])
@@ -47,39 +40,37 @@ class TTSConfig:
 
 class TTSModule:
     """
-    Handles Text-to-Speech conversion using ElevenLabs streaming API.
+    Handles Text-to-Speech conversion (frontend implementation).
+    This is now a mock implementation since TTS is handled in the frontend.
     """
     
     def __init__(self, config: TTSConfig):
         """Initialize the TTS module with the provided configuration."""
         self.config = config
-        self.elevenlabs_client = ElevenLabsWebSocketClient(
-            api_key=self.config.elevenlabs_api_key,
-            voice_id=self.config.voice_id,
-            model_id=self.config.model_id
-        )
-        # Set supported languages
-        self.elevenlabs_client.supported_languages = self.config.languages
-        logger.info(f"TTS Module initialized successfully with ElevenLabs. Languages: {', '.join(self.config.languages)}")
+        logger.info(f"TTS Module initialized successfully. Languages: {', '.join(self.config.languages)}")
         
     async def stream_text_to_speech(self, text_stream: AsyncGenerator[str, None]) -> AsyncGenerator[bytes, None]:
         """
-        Converts a stream of text to a stream of speech audio chunks.
+        Mock implementation for text-to-speech streaming.
         
         Args:
             text_stream: An async generator yielding text chunks.
             
         Returns:
-            An async generator yielding audio chunks (bytes).
+            An async generator yielding empty audio chunks (bytes).
         """
-        logger.info("Starting ElevenLabs TTS streaming.")
-        async for audio_chunk in self.elevenlabs_client.stream_tts(text_stream):
-            yield audio_chunk
+        logger.info("TTS is now handled in the frontend. This is a mock implementation.")
+        # Just consume the text stream to avoid hanging
+        full_text = ""
+        async for text in text_stream:
+            full_text += text
+            
+        # Return an empty audio chunk to maintain the interface
+        yield b''
 
     async def text_to_speech_file(self, text: str, output_filepath: Optional[str] = None) -> Optional[str]:
         """
-        Converts text to speech and saves it to a file (non-streaming for file output).
-        This uses the streaming client internally but buffers the output.
+        Mock implementation for text-to-speech file generation.
         
         Args:
             text: The text to convert.
@@ -99,22 +90,17 @@ class TTSModule:
             output_filepath = os.path.splitext(output_filepath)[0] + ".wav"
 
         try:
-            # Create an async generator for the single text input
-            async def single_text_generator():
-                yield text
-
-            audio_data_buffer = b''
-            async for chunk in self.elevenlabs_client.stream_tts(single_text_generator()):
-                audio_data_buffer += chunk
-
-            # Save as .wav since ElevenLabs streaming returns raw PCM
+            # Create a simple empty WAV file (8-bit PCM, 1 channel, 8000 Hz)
+            # This is just a placeholder since TTS is now handled in the frontend
             with open(output_filepath, "wb") as f:
-                f.write(audio_data_buffer)
-            logger.info(f"Text converted to speech and saved to {output_filepath}")
+                # Write a minimal WAV header
+                f.write(b'RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00@\x1f\x00\x00@\x1f\x00\x00\x01\x00\x08\x00data\x00\x00\x00\x00')
+                
+            logger.info(f"Mock TTS: Created empty audio file at {output_filepath}")
             return output_filepath
             
         except Exception as e:
-            logger.error(f"Error during TTS conversion to file: {e}")
+            logger.error(f"Error creating mock audio file: {e}")
             return None
 
 # Example usage

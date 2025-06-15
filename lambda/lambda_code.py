@@ -4,11 +4,15 @@ import os
 import re
 import time
 import random
+import base64
+import requests
 
-# Environment variables (configure in Lambda settings)
+# Environment variables (set these in your Lambda configuration)
 MODEL_ID = os.environ.get('MODEL_ID')  # e.g., anthropic.claude-3-haiku-20240307-v1:0
 KNOWLEDGE_BASE_ID = os.environ.get('KNOWLEDGE_BASE_ID')
 REGION = os.environ.get('AWS_REGION', 'us-west-2')
+ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
+ELEVENLABS_VOICE_ID = os.environ.get('ELEVENLABS_VOICE_ID')
 
 # AWS clients
 bedrock_runtime = boto3.client('bedrock-runtime', region_name=REGION)
@@ -41,10 +45,10 @@ def handle_message(event, connection_id):
         # Step 1: Retrieve KB context
         kb_context = retrieve_kb_context(user_query)
 
-        # Step 2: Call Claude Haiku with streaming and exponential backoff for throttling
+        # Step 2: Call Claude Haiku with streaming and exponential backoff
         response_stream = None
         max_retries = 5
-        base_delay = 1  # seconds
+        base_delay = 1
         for attempt in range(max_retries):
             try:
                 response_stream = bedrock_runtime.invoke_model_with_response_stream(
@@ -71,16 +75,25 @@ def handle_message(event, connection_id):
         if not response_stream:
             raise Exception("Failed to get a response from Bedrock after multiple retries.")
 
-        # Step 3: Accumulate the full response and send it as a single message
+        # Step 3: Accumulate the full response
         full_response = ""
         for event_chunk in response_stream['body']:
             chunk_json = json.loads(event_chunk['chunk']['bytes'].decode())
             if chunk_json.get("type") == "content_block_delta":
                 chunk = chunk_json['delta'].get('text', '')
                 full_response += chunk
-        # Send the full response as a single message
+
+        # Step 4: Generate audio with ElevenLabs
+        audio_base64 = synthesize_speech_elevenlabs(
+            text=full_response.strip(),
+            voice_id=ELEVENLABS_VOICE_ID,
+            api_key=ELEVENLABS_API_KEY
+        )
+
+        # Step 5: Send text + audio to client
         post_to_client(event, connection_id, {
             "response": full_response.strip(),
+            "audio": audio_base64,
             "session_id": connection_id
         })
 
@@ -98,20 +111,16 @@ def retrieve_kb_context(user_query):
         knowledgeBaseId=KNOWLEDGE_BASE_ID
     )
     docs = response.get("retrievalResults", [])
-    
     chunks = []
     for doc in docs[:3]:
         content = doc.get("content")
         if isinstance(content, str):
             chunks.append(content)
         elif isinstance(content, dict):
-            # Try extracting 'text' if nested
             chunks.append(content.get("text", ""))
         else:
-            chunks.append(str(content))  # fallback to safe cast
-
+            chunks.append(str(content))
     return "\n\n".join(chunks)
-
 
 
 def build_system_prompt(kb_context):
@@ -145,12 +154,27 @@ You act like a friendly, confident sales associate — guiding users through the
 """.strip()
 
 
+def synthesize_speech_elevenlabs(text, voice_id, api_key):
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+    headers = {
+        "xi-api-key": api_key,
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": {
+            "stability": 0.65,
+            "similarity_boost": 0.75
+        }
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        raise Exception(f"ElevenLabs TTS failed: {response.text}")
+    return base64.b64encode(response.content).decode("utf-8")
 
 
 def post_to_client(event, connection_id, data):
-    """
-    Sends a message to the connected WebSocket client.
-    """
     try:
         domain = event['requestContext']['domainName']
         stage = event['requestContext']['stage']
