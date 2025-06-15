@@ -327,43 +327,65 @@ const App = () => {
     responseStartTimeRef.current = null;
     setIsFirstChunk(true);
     
+    // Add a "processing voice..." message to indicate STT is running
+    addSystemMessage("Processing your voice input...");
+    
     // Set a default predicted response for voice input
-    setPredictedResponse('I\'m processing your question about P2P lending...');
+    setPredictedResponse('I\'m interpreting your question about P2P lending...');
     
     // Send the audio to the server
     fetch('/api/speech', {
       method: 'POST',
       body: formData
     })
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+        return response.json();
+      })
       .then(data => {
-        // Add user message with transcription
+        // Remove the processing message
+        setMessages(prevMessages => 
+          prevMessages.filter(msg => msg.content !== "Processing your voice input...")
+        );
+        
+        // If transcription succeeded, add user message
         if (data.text) {
+          // Add user message with transcription
           addMessage('user', data.text);
           
           // Update the predicted response based on the transcription
           const predicted = generatePredictedResponse(data.text);
           setPredictedResponse(predicted);
-        }
-        
-        // Handle response
-        if (data.response) {
-          // Hide typing indicator
-          setShowTypingIndicator(false);
           
-          // Add bot message
-          addMessage('assistant', data.response, data.audio_url);
-          
-          // Update bot status
-          setBotStatus('idle');
+          // Brief timeout to allow the user to see their transcribed message
+          setTimeout(() => {
+            // Handle response if available
+            if (data.response) {
+              // Hide typing indicator
+              setShowTypingIndicator(false);
+              
+              // Add bot message
+              addMessage('assistant', data.response, data.audio_url);
+              
+              // Update bot status
+              setBotStatus('idle');
+            }
+          }, 500);
         } else if (data.error) {
           // Hide typing indicator
           setShowTypingIndicator(false);
           
           // Add error message
-          addSystemMessage(`Error: ${data.error}`);
+          addSystemMessage(`Voice recognition error: ${data.error}`);
           
           // Update bot status
+          setBotStatus('idle');
+        } else {
+          // No transcription but no explicit error
+          setShowTypingIndicator(false);
+          addSystemMessage("Sorry, I couldn't recognize what you said. Please try again or use text input.");
           setBotStatus('idle');
         }
       })
@@ -373,8 +395,13 @@ const App = () => {
         // Hide typing indicator
         setShowTypingIndicator(false);
         
-        // Add error message
-        addSystemMessage('Error sending audio. Please try again.');
+        // Remove the processing message
+        setMessages(prevMessages => 
+          prevMessages.filter(msg => msg.content !== "Processing your voice input...")
+        );
+        
+        // Add more descriptive error message
+        addSystemMessage('Voice recognition failed. This could be due to audio quality or network issues. Please try again or use text input.');
         
         // Update bot status
         setBotStatus('idle');

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ElevenLabs STT Demo - P2P Lending Voice AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4e75ff;
+            --secondary: #5d6795;
+            --background: #f5f7fa;
+            --text: #333;
+            --card-bg: #ffffff;
+            --border: #e0e4ec;
+            --highlight: #4e75ff;
+            --success: #56bd5b;
+            --error: #e74c3c;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: var(--secondary);
+            font-weight: normal;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .card h2 i {
+            margin-right: 8px;
+            color: var(--primary);
+        }
+        
+        .demo-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .record-container {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .record-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .record-button:hover {
+            background: rgba(78, 117, 255, 0.1);
+        }
+        
+        .record-button.recording {
+            background: var(--error);
+            border-color: var(--error);
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status {
+            flex: 1;
+            font-size: 16px;
+        }
+        
+        .upload-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .upload-container label {
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .upload-container label:hover {
+            background: var(--highlight);
+        }
+        
+        .upload-container input {
+            display: none;
+        }
+        
+        .file-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .results {
+            margin-top: 30px;
+        }
+        
+        .result-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .result-box h3 {
+            font-size: 14px;
+            color: var(--secondary);
+            margin-bottom: 8px;
+        }
+        
+        .result-content {
+            font-size: 16px;
+            white-space: pre-wrap;
+        }
+        
+        .error-message {
+            color: var(--error);
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(78, 117, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7);
+            }
+            70% {
+                transform: scale(1.05);
+                box-shadow: 0 0 0 10px rgba(231, 76, 60, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+            }
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ElevenLabs STT Demo</h1>
+            <p class="subtitle">Test speech-to-text functionality using ElevenLabs API</p>
+        </header>
+        
+        <div class="card">
+            <h2><i class="fas fa-microphone"></i> Voice Input</h2>
+            <div class="demo-controls">
+                <div class="record-container">
+                    <button id="recordButton" class="record-button">
+                        <i class="fas fa-microphone" id="recordIcon"></i>
+                    </button>
+                    <div class="status">
+                        <div id="recordingStatus">Click the microphone to start recording</div>
+                        <div id="recordingTime"></div>
+                        <div id="recordingError" class="error-message"></div>
+                    </div>
+                </div>
+                
+                <div class="upload-container">
+                    <label for="fileUpload">
+                        <i class="fas fa-upload"></i> Upload Audio File
+                    </label>
+                    <input type="file" id="fileUpload" accept="audio/*" />
+                    <div id="fileName" class="file-name"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results">
+            <div id="loadingIndicator" style="display: none;">
+                <span>Processing your audio</span>
+                <span class="loading"></span>
+            </div>
+            
+            <div id="transcriptionResult" class="result-box" style="display: none;">
+                <h3>Transcription Result:</h3>
+                <div id="transcriptionText" class="result-content"></div>
+            </div>
+            
+            <div id="errorResult" class="result-box" style="display: none;">
+                <h3>Error:</h3>
+                <div id="errorText" class="result-content error-message"></div>
+            </div>
+        </div>
+        
+        <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to main application</a>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const recordButton = document.getElementById('recordButton');
+        const recordIcon = document.getElementById('recordIcon');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const recordingTime = document.getElementById('recordingTime');
+        const recordingError = document.getElementById('recordingError');
+        const fileUpload = document.getElementById('fileUpload');
+        const fileName = document.getElementById('fileName');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const transcriptionResult = document.getElementById('transcriptionResult');
+        const transcriptionText = document.getElementById('transcriptionText');
+        const errorResult = document.getElementById('errorResult');
+        const errorText = document.getElementById('errorText');
+        
+        // State
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingInterval = null;
+        let recordingSeconds = 0;
+        let audioBlob = null;
+        
+        // Format time as MM:SS
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const secs = (seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+        
+        // Start recording
+        async function startRecording() {
+            try {
+                // Reset error message
+                recordingError.textContent = '';
+                
+                // Reset results
+                hideResults();
+                
+                // Get stream with specific settings for ElevenLabs
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                // Reset audio chunks
+                audioChunks = [];
+                
+                // Create media recorder
+                const options = { mimeType: 'audio/webm' };
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+                // Handle data available event
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                // Handle recording stop
+                mediaRecorder.onstop = () => {
+                    // Create blob from audio chunks
+                    audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    
+                    // Send for transcription
+                    transcribeAudio(audioBlob);
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                // Start recording
+                mediaRecorder.start(100);
+                
+                // Update UI
+                isRecording = true;
+                recordButton.classList.add('recording');
+                recordIcon.className = 'fas fa-stop';
+                recordingStatus.textContent = 'Recording...';
+                
+                // Start timer
+                recordingSeconds = 0;
+                recordingTime.textContent = formatTime(recordingSeconds);
+                recordingInterval = setInterval(() => {
+                    recordingSeconds++;
+                    recordingTime.textContent = formatTime(recordingSeconds);
+                    
+                    // Auto-stop after 20 seconds
+                    if (recordingSeconds >= 20) {
+                        stopRecording();
+                    } else if (recordingSeconds === 15) {
+                        recordingError.textContent = 'Recording will end in 5 seconds...';
+                    }
+                }, 1000);
+                
+                // Auto-stop after 20 seconds
+                setTimeout(() => {
+                    if (isRecording) {
+                        stopRecording();
+                    }
+                }, 20000);
+                
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                recordingError.textContent = 'Could not access microphone. Please check your browser permissions.';
+            }
+        }
+        
+        // Stop recording
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                clearInterval(recordingInterval);
+                
+                // Update UI
+                isRecording = false;
+                recordButton.classList.remove('recording');
+                recordIcon.className = 'fas fa-microphone';
+                recordingStatus.textContent = 'Processing audio...';
+                recordingError.textContent = '';
+            }
+        }
+        
+        // Toggle recording
+        function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+        
+        // Handle file upload
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Reset results
+            hideResults();
+            
+            // Update UI
+            fileName.textContent = file.name;
+            recordingStatus.textContent = 'File selected, processing...';
+            
+            // Transcribe the uploaded file
+            transcribeAudio(file);
+        }
+        
+        // Hide results
+        function hideResults() {
+            transcriptionResult.style.display = 'none';
+            errorResult.style.display = 'none';
+        }
+        
+        // Transcribe audio
+        function transcribeAudio(audioData) {
+            // Show loading indicator
+            loadingIndicator.style.display = 'block';
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('audio', audioData, 'recording.wav');
+            
+            // Send to server
+            fetch('/api/speech', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Hide loading indicator
+                    loadingIndicator.style.display = 'none';
+                    
+                    // Show transcription if available
+                    if (data.text) {
+                        transcriptionText.textContent = data.text;
+                        transcriptionResult.style.display = 'block';
+                        recordingStatus.textContent = 'Transcription complete';
+                    } else if (data.error) {
+                        // Show error
+                        errorText.textContent = data.error;
+                        errorResult.style.display = 'block';
+                        recordingStatus.textContent = 'Error during transcription';
+                    } else {
+                        // No transcription or error
+                        errorText.textContent = "Couldn't recognize any speech in the audio";
+                        errorResult.style.display = 'block';
+                        recordingStatus.textContent = 'No speech detected';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error transcribing audio:', error);
+                    
+                    // Hide loading indicator
+                    loadingIndicator.style.display = 'none';
+                    
+                    // Show error
+                    errorText.textContent = `Error: ${error.message || 'Unknown error occurred during transcription'}`;
+                    errorResult.style.display = 'block';
+                    recordingStatus.textContent = 'Transcription failed';
+                });
+        }
+        
+        // Event listeners
+        recordButton.addEventListener('click', toggleRecording);
+        fileUpload.addEventListener('change', handleFileSelect);
+    </script>
+</body>
+</html> 

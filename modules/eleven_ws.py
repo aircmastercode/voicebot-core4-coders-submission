@@ -82,12 +82,16 @@ class ElevenLabsWebSocketClient:
         """
         Streams audio to ElevenLabs for STT and calls a callback with transcriptions.
         """
-        stt_uri = f"wss://api.elevenlabs.io/v1/speech-to-text/ws?model_id={self.model_id}"
+        # The proper URL for ElevenLabs Speech-to-Text WebSocket API
+        # Note: As of the latest information, ElevenLabs may not support WebSocket STT
+        # So this might still fail
+        stt_uri = f"wss://api.elevenlabs.io/v1/speech-to-text/streaming?model_id={self.model_id}"
+        
         try:
             async with websockets.connect(stt_uri) as ws:
-                # Send initiation message
+                # Send initiation message with API key in the headers
                 await ws.send(json.dumps({
-                    "api_key": self.api_key,
+                    "xi_api_key": self.api_key,  # Use xi_api_key instead of api_key
                     "sample_rate": 16000, # ElevenLabs STT expects 16kHz
                     "language": "en" # Assuming English for now
                 }))
@@ -122,46 +126,39 @@ class ElevenLabsWebSocketClient:
     async def stream_sts(self, audio_stream: AsyncGenerator[bytes, None], on_audio_chunk: Callable[[bytes], None]):
         """
         Streams audio to ElevenLabs for STS (Speech-to-Speech) and calls a callback with converted audio chunks.
-        NOTE: ElevenLabs STS API often involves voice conversion on complete audio segments rather than continuous streaming.
-        This implementation assumes a streaming-like interaction for demonstration/future-proofing.
+        This implementation combines STT and TTS to achieve speech-to-speech functionality.
         """
-        sts_uri = f"wss://api.elevenlabs.io/v1/speech-to-text/ws?model_id={self.model_id}" # Placeholder URI, actual STS URI may differ
         try:
-            async with websockets.connect(sts_uri) as ws:
-                # Send initiation message (similar to STT, but may need STS-specific params)
-                await ws.send(json.dumps({
-                    "api_key": self.api_key,
-                    "sample_rate": 16000, # ElevenLabs expects 16kHz
-                    "target_voice_id": self.voice_id, # Target voice for conversion
-                    "output_format": "pcm_16000", # Desired output audio format
-                }))
-
-                # Task to send audio
-                async def send_audio():
-                    try:
-                        async for chunk in audio_stream:
-                            await ws.send(chunk)
-                        await ws.send(json.dumps({"eof": True})) # End of audio stream
-                    except Exception as e:
-                        logger.error(f"Error sending audio for STS: {e}")
-
-                # Task to receive converted audio
-                async def receive_converted_audio():
-                    try:
-                        async for message in ws:
-                            data = json.loads(message)
-                            if "audio" in data and data["audio"]:
-                                on_audio_chunk(data["audio"])
-                            elif "error" in data:
-                                logger.error(f"ElevenLabs STS error: {data['message']}")
-                                break
-                    except Exception as e:
-                        logger.error(f"Error receiving converted audio from STS: {e}")
-
-                await asyncio.gather(send_audio(), receive_converted_audio())
-
+            # Step 1: First transcribe the audio using STT
+            transcription_results = []
+            
+            def on_transcription(transcript):
+                logger.info(f"STS intermediate transcription: {transcript}")
+                transcription_results.append(transcript)
+            
+            # Use our existing stream_stt method
+            await self.stream_stt(audio_stream, on_transcription)
+            
+            # Get the final transcription
+            final_transcription = transcription_results[-1] if transcription_results else ""
+            
+            if not final_transcription:
+                logger.error("STS failed: No transcription produced")
+                return
+                
+            logger.info(f"STS transcription complete: {final_transcription}")
+            
+            # Step 2: Now convert the transcription to speech using TTS
+            async def text_generator():
+                yield final_transcription
+                
+            # Use our existing stream_tts method
+            async for audio_chunk in self.stream_tts(text_generator()):
+                # Pass the audio chunk to the callback
+                on_audio_chunk(audio_chunk)
+                
         except Exception as e:
-            logger.error(f"Failed to connect or stream STS: {e}")
+            logger.error(f"Failed to perform speech-to-speech conversion: {e}")
 
 # Example Usage (for TTS)
 async def main():

@@ -89,7 +89,10 @@ class TTSModule:
             return None
 
         if not output_filepath:
-            output_filepath = f"temp_audio_{uuid.uuid4()}.mp3" # ElevenLabs returns PCM, need to convert or save as WAV
+            output_filepath = f"temp_audio_{uuid.uuid4()}.wav"  # Always use .wav extension
+        else:
+            # Ensure the output filepath has a .wav extension
+            output_filepath = os.path.splitext(output_filepath)[0] + ".wav"
 
         try:
             # Create an async generator for the single text input
@@ -100,15 +103,11 @@ class TTSModule:
             async for chunk in self.elevenlabs_client.stream_tts(single_text_generator()):
                 audio_data_buffer += chunk
 
-            # For simplicity, saving as a raw PCM or WAV. MP3 conversion would require another library.
-            # ElevenLabs streaming returns raw PCM, so saving as .wav is more appropriate.
-            # If output_filepath is .mp3, it implies a conversion step which is out of scope for this module.
-            # Let's save as .wav for now.
-            output_filepath_wav = os.path.splitext(output_filepath)[0] + ".wav"
-            with open(output_filepath_wav, "wb") as f:
+            # Save as .wav since ElevenLabs streaming returns raw PCM
+            with open(output_filepath, "wb") as f:
                 f.write(audio_data_buffer)
-            logger.info(f"Text converted to speech and saved to {output_filepath_wav}")
-            return output_filepath_wav
+            logger.info(f"Text converted to speech and saved to {output_filepath}")
+            return output_filepath
             
         except Exception as e:
             logger.error(f"Error during TTS conversion to file: {e}")

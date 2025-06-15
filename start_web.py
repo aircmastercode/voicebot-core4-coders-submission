@@ -31,21 +31,47 @@ def check_environment():
         if env_example_path.exists():
             try:
                 with open(env_example_path, 'r') as sample:
+                    env_content = sample.read()
+                    # Add ELEVENLABS_API_KEY if it doesn't exist
+                    if "ELEVENLABS_API_KEY" not in env_content:
+                        env_content += "\n# ElevenLabs API Key (for ASR and TTS)\nELEVENLABS_API_KEY=your-elevenlabs-api-key\n"
+                    
                     with open(env_file_path, 'w') as env_file:
-                        env_file.write(sample.read())
+                        env_file.write(env_content)
                 logger.info("Created .env file from sample. Please edit it with your API keys.")
             except Exception as e:
                 logger.error(f"Failed to create .env file: {e}")
                 return False
         else:
-            logger.error("Neither .env nor sample env file found.")
-            return False
+            # Create a basic .env file if sample doesn't exist
+            try:
+                with open(env_file_path, 'w') as env_file:
+                    env_file.write("""# AWS Configuration
+API_GATEWAY_URL=wss://jiehdal92f.execute-api.us-west-2.amazonaws.com/devx/
+API_GATEWAY_KEY=your-api-gateway-key
+
+# ElevenLabs API Key (for ASR and TTS)
+ELEVENLABS_API_KEY=your-elevenlabs-api-key
+
+# AWS Bedrock Configuration
+KNOWLEDGE_BASE_ID=your-knowledge-base-id
+S3_BUCKET_NAME=your-s3-bucket
+
+# AWS Credentials
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=us-west-2
+""")
+                logger.info("Created basic .env file. Please edit it with your API keys.")
+            except Exception as e:
+                logger.error(f"Failed to create basic .env file: {e}")
+                return False
     
     # Load environment variables
     load_dotenv()
     
     # Check for required API keys
-    required_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"]
+    required_vars = ["ELEVENLABS_API_KEY"]
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     
     if missing_vars:

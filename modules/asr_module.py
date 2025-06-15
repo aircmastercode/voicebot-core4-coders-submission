@@ -5,6 +5,8 @@ from typing import AsyncGenerator, Callable, Optional
 
 from dotenv import load_dotenv
 import yaml
+import requests
+from pathlib import Path
 
 from modules.eleven_ws import ElevenLabsWebSocketClient
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ASRConfig:
     """Configuration for the ASR module, loaded from config.yaml."""
-    def __init__(self, model_id: str = "eleven_multilingual_v1"): # ElevenLabs STT model
+    def __init__(self, model_id: str = "scribe_v1"): # ElevenLabs STT model
         self.model_id = model_id
         self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
 
@@ -27,7 +29,7 @@ class ASRConfig:
                 config = yaml.safe_load(f)
             asr_config = config.get("asr", {})
             return cls(
-                model_id=asr_config.get("model_id", "eleven_multilingual_v1")
+                model_id=asr_config.get("model_id", "scribe_v1")
             )
         except FileNotFoundError:
             logger.warning(f"Config file not found at {config_path}, using defaults")
@@ -54,6 +56,44 @@ class ASRModule:
         """
         logger.info("Starting ElevenLabs STT streaming.")
         await self.elevenlabs_client.stream_stt(audio_stream, on_transcription)
+        
+    def transcribe_file(self, file_path: str) -> str:
+        """
+        Transcribes an audio file to text.
+        Args:
+            file_path: Path to the audio file.
+        Returns:
+            The transcribed text.
+        """
+        logger.info(f"Transcribing file: {file_path}")
+        try:
+            # Use the REST API approach since it's working more reliably
+            # ElevenLabs STT REST API endpoint
+            url = "https://api.elevenlabs.io/v1/speech-to-text"
+            
+            headers = {
+                "xi-api-key": self.config.elevenlabs_api_key,
+                "Accept": "application/json"
+            }
+            
+            # Include model_id in request body using multipart/form-data
+            with open(file_path, "rb") as audio_file:
+                files = {"file": (Path(file_path).name, audio_file, "audio/wav")}
+                data = {"model_id": self.config.model_id}
+                response = requests.post(url, headers=headers, data=data, files=files)
+            
+            if response.status_code == 200:
+                result = response.json()
+                transcription = result.get("text", "")
+                logger.info(f"Received transcription: {transcription}")
+                return transcription
+            else:
+                logger.error(f"Error from ElevenLabs API: {response.status_code} - {response.text}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Error transcribing file: {e}")
+            return ""
 
 # Example Usage
 async def main():

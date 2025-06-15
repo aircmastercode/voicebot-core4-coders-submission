@@ -284,6 +284,15 @@ main {
   }
 }
 
+.mic-btn.error {
+  border-color: #e74c3c;
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.mic-btn.error:hover {
+  background-color: rgba(231, 76, 60, 0.2);
+}
+
 .voice-status {
   margin-left: 1rem;
   text-align: center;
@@ -535,6 +544,20 @@ main {
   background-color: #2d9448;
 }
 
+.audio-player.error {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.audio-error {
+  color: #e74c3c;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 /* Utility classes */
 .hidden {
   display: none !important;
@@ -583,4 +606,9 @@ main {
   .voice-status {
     font-size: 0.9rem;
   }
+}
+
+.voice-status #voice-status-text.error {
+  color: #e74c3c;
+  font-weight: 500;
 } 

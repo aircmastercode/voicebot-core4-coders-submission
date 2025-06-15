@@ -32,7 +32,7 @@ api_gateway:
 # ASR (Automatic Speech Recognition) Configuration
 # ==============================================================================
 asr:
-  model_id: eleven_multilingual_v1 # ElevenLabs STT model (e.g., eleven_multilingual_v1)
+  model_id: scribe_v1 # ElevenLabs STT model
 
 # ==============================================================================
 # TTS (Text-to-Speech) Configuration
