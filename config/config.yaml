@@ -32,21 +32,16 @@ api_gateway:
 # ASR (Automatic Speech Recognition) Configuration
 # ==============================================================================
 asr:
-  model: "whisper-1" # OpenAI's Whisper model for speech recognition
-  language: "en" # Default language
-  sample_rate: 16000 # Sample rate in Hz, 16kHz is optimal for Whisper
-  silence_threshold: 0.03 # For silence detection
-  continuous_mode: true # Whether to use continuous listening mode
+  model_id: eleven_multilingual_v1 # ElevenLabs STT model (e.g., eleven_multilingual_v1)
 
 # ==============================================================================
 # TTS (Text-to-Speech) Configuration
 # ==============================================================================
 tts:
-  model: "tts-1" # OpenAI's TTS model (options: tts-1, tts-1-hd)
-  voice: "nova" # Voice to use (options: alloy, echo, fable, onyx, nova, shimmer)
-  output_format: "mp3" # Output format
-  speed: 1.0 # Speed multiplier (0.25 - 4.0)
-  add_discourse_markers: true # Add natural discourse markers like pauses and filler words
+  voice_id: EXAVITQu4vr4xnSDxMaL # Default voice for ElevenLabs
+  model_id: eleven_monolingual_v1 # Default model for ElevenLabs
+  output_format: mp3 # For file saving, streaming is raw PCM
+  speed: 1.0 # Not directly used by streaming, but kept for consistency
 
 # ==============================================================================
 # Logging Configuration

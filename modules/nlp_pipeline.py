@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass
 
 from modules.websocket_client import WebSocketClient
+from modules.tts_module import TTSModule, TTSConfig
 
 # Initialize logging
 logger = logging.getLogger(__name__)
@@ -48,14 +49,14 @@ class NLPPipeline:
     """
     Orchestrates NLP processing by sending requests to the backend API via WebSocket.
     """
-    def __init__(self, config: NLPConfig, tts_service=None):
+    def __init__(self, config: NLPConfig):
         self.config = config
-        self.tts_service = tts_service
+        self.tts_config = TTSConfig.from_yaml() # Load TTS config
+        self.tts_service = TTSModule(config=self.tts_config) # Initialize TTS service
         self.ws_client = WebSocketClient(
             base_url=self.config.api_base_url,
-            api_key=self.config.api_key,
-            tts_service=self.tts_service
-        )
+            api_key=self.config.api_key
+        ) # TTS service is now handled directly by NLPPipeline, not passed to WebSocketClient
         logger.info("NLP Pipeline initialized successfully.")
         
     async def process_input(self, text: str, session_id: Optional[str] = None, history: Optional[List[Dict[str, str]]] = None, 
@@ -94,9 +95,14 @@ class NLPPipeline:
             # This part is for the web server, not run_inference
             if "response" in response and self.tts_service and "audio_url" not in response:
                 try:
-                    audio_filename = f"{uuid.uuid4()}.mp3"
-                    audio_path = f"static/audio/{audio_filename}"
-                    audio_file = self.tts_service.text_to_speech(response["response"], audio_path)
+                    # Use the new async text_to_speech_file method
+                    audio_filename = f"{uuid.uuid4()}.wav" # ElevenLabs streams PCM, save as WAV
+                    audio_path = os.path.join("static", "audio", audio_filename)
+                    
+                    # Ensure the directory exists
+                    os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+
+                    audio_file = await self.tts_service.text_to_speech_file(response["response"], audio_path)
                     if audio_file:
                         response["audio_url"] = f"/static/audio/{audio_filename}"
                         logger.info(f"Generated audio for response: {response['audio_url']}")
@@ -120,7 +126,7 @@ class NLPPipeline:
             logger.error(f"Error during NLP pipeline cleanup: {e}")
 
 # Example usage:
-if __name__ == '__main__':
+async def main():
     # This is for demonstration purposes. 
     # In the actual application, the pipeline would be initialized once.
     logging.basicConfig(level=logging.INFO)
@@ -129,7 +135,7 @@ if __name__ == '__main__':
     # with API_GATEWAY_URL and API_GATEWAY_KEY for this to work.
     try:
         nlp_config = NLPConfig.from_yaml()
-        pipeline = NLPPipeline(config=nlp_config)
+        pipeline = NLPPipeline(config=nlp_config) # TTS service is now initialized internally
         
         # Example of processing user input with streaming
         def handle_stream(chunk):
@@ -141,8 +147,11 @@ if __name__ == '__main__':
                 print(f"Error: {chunk['error']}")
         
         user_query = "Hi, what are the risks of peer-to-peer lending?"
-        result = pipeline.process_input(user_query, session_id="test-session-123", stream_handler=handle_stream)
+        result = await pipeline.process_input(user_query, session_id="test-session-123", stream_handler=handle_stream)
         print(f"Result: {result}")
 
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"Failed to initialize NLP pipeline: {e}") 
+        logger.error(f"Failed to initialize NLP pipeline: {e}")
+
+if __name__ == '__main__':
+    asyncio.run(main()) 

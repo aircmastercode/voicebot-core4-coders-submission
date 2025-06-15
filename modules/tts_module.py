@@ -1,24 +1,12 @@
-#!/usr/bin/env python3
-"""
-TTS (Text-to-Speech) module for the P2P Lending Voice AI Assistant.
-
-This module handles converting text responses to speech using OpenAI's TTS API
-or other configured TTS services.
-"""
-
 import os
-import io
 import logging
-import tempfile
-from typing import Optional, Dict, Any
-import yaml
-import soundfile as sf
-import numpy as np
-import sounddevice as sd
-import openai
+import asyncio
+from typing import Optional, Dict, Any, AsyncGenerator
 from dotenv import load_dotenv
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
+import yaml
+import uuid
+
+from modules.eleven_ws import ElevenLabsWebSocketClient
 
 # Load environment variables
 load_dotenv()
@@ -29,17 +17,13 @@ logger = logging.getLogger(__name__)
 class TTSConfig:
     """Configuration for the TTS module, loaded from config.yaml."""
     
-    def __init__(self, 
-                 model: str = "tts-1", 
-                 voice: str = "alloy", 
-                 output_format: str = "mp3",
-                 speed: float = 1.0):
+    def __init__(self, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_monolingual_v1", output_format: str = "mp3", speed: float = 1.0):
         """Initialize TTS configuration with default values."""
-        self.model = model
-        self.voice = voice
-        self.output_format = output_format
-        self.speed = speed
-        self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        self.voice_id = voice_id
+        self.model_id = model_id
+        self.output_format = output_format # Note: ElevenLabs streaming always returns PCM, this might be for file saving
+        self.speed = speed # This might not be directly used by streaming API, but can be for post-processing
+        self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
         
     @classmethod
     def from_yaml(cls, config_path: str = "config/config.yaml") -> "TTSConfig":
@@ -50,8 +34,8 @@ class TTSConfig:
                 
             tts_config = config.get("tts", {})
             return cls(
-                model=tts_config.get("model", "tts-1"),
-                voice=tts_config.get("voice", "alloy"),
+                voice_id=tts_config.get("voice_id", "EXAVITQu4vr4xnSDxMaL"),
+                model_id=tts_config.get("model_id", "eleven_monolingual_v1"),
                 output_format=tts_config.get("output_format", "mp3"),
                 speed=tts_config.get("speed", 1.0)
             )
@@ -61,135 +45,103 @@ class TTSConfig:
 
 class TTSModule:
     """
-    Handles text-to-speech conversion using OpenAI's TTS API.
+    Handles Text-to-Speech conversion using ElevenLabs streaming API.
     """
     
     def __init__(self, config: TTSConfig):
         """Initialize the TTS module with the provided configuration."""
         self.config = config
-        self.openai_client = openai.OpenAI(api_key=self.config.openai_api_key)
-        logger.info("TTS Module initialized successfully.")
-        
-    def upload_to_s3(self, file_path: str, bucket: str, s3_key: str) -> str:
-        """
-        Upload a file to AWS S3.
-        Args:
-            file_path: Local path to the file.
-            bucket: S3 bucket name.
-            s3_key: S3 object key (path in bucket).
-        Returns:
-            S3 URL of the uploaded file, or empty string if failed.
-        """
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION')
+        self.elevenlabs_client = ElevenLabsWebSocketClient(
+            api_key=self.config.elevenlabs_api_key,
+            voice_id=self.config.voice_id,
+            model_id=self.config.model_id
         )
-        try:
-            s3.upload_file(file_path, bucket, s3_key)
-            s3_url = f"https://{bucket}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{s3_key}"
-            logger.info(f"Uploaded audio to S3: {s3_url}")
-            return s3_url
-        except (NoCredentialsError, ClientError) as e:
-            logger.error(f"Failed to upload to S3: {e}")
-            return ""
+        logger.info("TTS Module initialized successfully with ElevenLabs.")
+        
+    async def stream_text_to_speech(self, text_stream: AsyncGenerator[str, None]) -> AsyncGenerator[bytes, None]:
+        """
+        Converts a stream of text to a stream of speech audio chunks.
+        
+        Args:
+            text_stream: An async generator yielding text chunks.
+            
+        Returns:
+            An async generator yielding audio chunks (bytes).
+        """
+        logger.info("Starting ElevenLabs TTS streaming.")
+        async for audio_chunk in self.elevenlabs_client.stream_tts(text_stream):
+            yield audio_chunk
 
-    def text_to_speech(self, text: str, output_file: Optional[str] = None, upload_s3: bool = False, s3_bucket: Optional[str] = None, s3_key: Optional[str] = None) -> str:
+    async def text_to_speech_file(self, text: str, output_filepath: Optional[str] = None) -> Optional[str]:
         """
-        Convert text to speech using Amazon Polly and save to a file. Optionally upload to S3.
+        Converts text to speech and saves it to a file (non-streaming for file output).
+        This uses the streaming client internally but buffers the output.
+        
         Args:
-            text: Text to convert to speech
-            output_file: Path to save the audio file. If None, a temporary file is created.
-            upload_s3: If True, upload the audio file to S3.
-            s3_bucket: S3 bucket name (required if upload_s3 is True).
-            s3_key: S3 object key (required if upload_s3 is True).
+            text: The text to convert.
+            output_filepath: The path to save the generated audio file. If None, a temporary file is created.
+            
         Returns:
-            The path to the generated audio file, or S3 URL if uploaded.
+            The path to the generated audio file, or None if an error occurred.
         """
-        polly_client = boto3.client('polly', region_name=os.getenv('AWS_REGION'))
         if not text:
-            logger.warning("Empty text provided for TTS")
-            return ""
-        if output_file is None:
-            fd, output_file = tempfile.mkstemp(suffix=".mp3")
-            os.close(fd)
+            logger.warning("No text provided for TTS conversion.")
+            return None
+
+        if not output_filepath:
+            output_filepath = f"temp_audio_{uuid.uuid4()}.mp3" # ElevenLabs returns PCM, need to convert or save as WAV
+
         try:
-            logger.info(f"Converting text to speech with Polly: '{text[:50]}...'")
-            response = polly_client.synthesize_speech(
-                Text=text,
-                OutputFormat='mp3',
-                VoiceId='Joanna'  # You can make this configurable
-            )
-            with open(output_file, 'wb') as f:
-                f.write(response['AudioStream'].read())
-            logger.info(f"Audio saved to {output_file}")
-            if upload_s3 and s3_bucket and s3_key:
-                s3_url = self.upload_to_s3(output_file, s3_bucket, s3_key)
-                return s3_url if s3_url else output_file
-            return output_file
-        except Exception as e:
-            logger.error(f"Error during text-to-speech conversion: {e}")
-            return ""
-            
-    def speak(self, text: str) -> bool:
-        """
-        Convert text to speech and play it.
-        
-        Args:
-            text: Text to convert to speech
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            # Get the audio file
-            audio_file = self.text_to_speech(text)
-            if not audio_file:
-                return False
-                
-            # Play the audio file
-            data, samplerate = sf.read(audio_file)
-            sd.play(data, samplerate)
-            sd.wait()  # Wait until playback is finished
-            
-            # Clean up the temporary file
-            if os.path.exists(audio_file):
-                os.remove(audio_file)
-                
-            return True
+            # Create an async generator for the single text input
+            async def single_text_generator():
+                yield text
+
+            audio_data_buffer = b''
+            async for chunk in self.elevenlabs_client.stream_tts(single_text_generator()):
+                audio_data_buffer += chunk
+
+            # For simplicity, saving as a raw PCM or WAV. MP3 conversion would require another library.
+            # ElevenLabs streaming returns raw PCM, so saving as .wav is more appropriate.
+            # If output_filepath is .mp3, it implies a conversion step which is out of scope for this module.
+            # Let's save as .wav for now.
+            output_filepath_wav = os.path.splitext(output_filepath)[0] + ".wav"
+            with open(output_filepath_wav, "wb") as f:
+                f.write(audio_data_buffer)
+            logger.info(f"Text converted to speech and saved to {output_filepath_wav}")
+            return output_filepath_wav
             
         except Exception as e:
-            logger.error(f"Error playing speech: {e}")
-            return False
-            
-    def add_speech_markers(self, text: str) -> str:
-        """
-        Add SSML speech markers to make the output more natural.
-        
-        Args:
-            text: Text to add speech markers to
-            
-        Returns:
-            Text with speech markers
-        """
-        # Simple implementation - can be expanded with more sophisticated SSML
-        # This depends on the TTS engine's capabilities
-        return text
+            logger.error(f"Error during TTS conversion to file: {e}")
+            return None
 
 # Example usage
-if __name__ == '__main__':
+async def main():
     logging.basicConfig(level=logging.INFO)
     
     try:
         tts_config = TTSConfig.from_yaml()
         tts = TTSModule(config=tts_config)
         
-        result = tts.speak("Hello! I am your P2P lending assistant. How can I help you today?")
-        if result:
-            print("Speech played successfully")
+        text_to_convert = "Hello, this is a test of the ElevenLabs streaming Text-to-Speech module."
+        
+        # Example of streaming TTS
+        async def text_gen():
+            yield text_to_convert
+
+        print("Streaming TTS...")
+        async for chunk in tts.stream_text_to_speech(text_gen()):
+            # In a real app, you'd play this audio chunk
+            print(f"Received streaming audio chunk of size: {len(chunk)} bytes")
+
+        # Example of saving to file (buffers entire audio then saves)
+        output_file = await tts.text_to_speech_file(text_to_convert, "test_output.wav")
+        if output_file:
+            print(f"Audio saved to: {output_file}")
         else:
-            print("Failed to play speech")
+            print("TTS file conversion failed.")
             
     except Exception as e:
-        logger.error(f"Error in TTS module example: {e}") 
+        logger.error(f"Error in TTS module example: {e}")
+
+if __name__ == '__main__':
+    asyncio.run(main())
