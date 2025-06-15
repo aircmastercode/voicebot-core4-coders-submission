@@ -77,10 +77,9 @@ class NLPPipeline:
             logger.warning("Input text is empty. Skipping processing.")
             return None
 
+        # Payload for the WebSocket client, only containing the text.
         payload = {
-            "text": text,
-            "session_id": session_id,
-            "history": history or []
+            "text": text
         }
 
         logger.info(f"Sending text to NLP backend with payload: {json.dumps(payload, indent=2)}")

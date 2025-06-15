@@ -2,6 +2,8 @@ import json
 import boto3
 import os
 import re
+import time
+import random
 
 # Environment variables (configure in Lambda settings)
 MODEL_ID = os.environ.get('MODEL_ID')  # e.g., anthropic.claude-3-haiku-20240307-v1:0
@@ -39,42 +41,46 @@ def handle_message(event, connection_id):
         # Step 1: Retrieve KB context
         kb_context = retrieve_kb_context(user_query)
 
-        # Step 2: Call Claude Haiku with streaming
-        response_stream = bedrock_runtime.invoke_model_with_response_stream(
-            modelId=MODEL_ID,
-            body=json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": user_query
-                    }
-                ],
-                "system": build_system_prompt(kb_context),
-                "max_tokens": 800,
-                "temperature": 0.6
-            }),
-            contentType="application/json",
-            accept="application/json"
-        )
+        # Step 2: Call Claude Haiku with streaming and exponential backoff for throttling
+        response_stream = None
+        max_retries = 5
+        base_delay = 1  # seconds
+        for attempt in range(max_retries):
+            try:
+                response_stream = bedrock_runtime.invoke_model_with_response_stream(
+                    modelId=MODEL_ID,
+                    body=json.dumps({
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "messages": [{"role": "user", "content": user_query}],
+                        "system": build_system_prompt(kb_context),
+                        "max_tokens": 800,
+                        "temperature": 0.6
+                    }),
+                    contentType="application/json",
+                    accept="application/json"
+                )
+                break
+            except bedrock_runtime.exceptions.ThrottlingException as e:
+                if attempt < max_retries - 1:
+                    delay = (base_delay * 2**attempt) + random.uniform(0, 1)
+                    print(f"ThrottlingException caught. Retrying in {delay:.2f} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                else:
+                    print("Max retries reached for ThrottlingException. Failing.")
+                    raise e
+        if not response_stream:
+            raise Exception("Failed to get a response from Bedrock after multiple retries.")
 
-        # Step 3: Stream response sentence-by-sentence
+        # Step 3: Accumulate the full response and send it as a single message
+        full_response = ""
         for event_chunk in response_stream['body']:
             chunk_json = json.loads(event_chunk['chunk']['bytes'].decode())
-
             if chunk_json.get("type") == "content_block_delta":
                 chunk = chunk_json['delta'].get('text', '')
-                # Split chunk into sentences for smoother streaming
-                sentences = re.split(r'(?<=[.!?]) +', chunk)
-                for sentence in sentences:
-                    if sentence.strip():
-                        post_to_client(event, connection_id, {
-                            "response_chunk": sentence,
-                            "session_id": connection_id
-                        })
-
+                full_response += chunk
+        # Send the full response as a single message
         post_to_client(event, connection_id, {
-            "event": "stream_end",
+            "response": full_response.strip(),
             "session_id": connection_id
         })
 

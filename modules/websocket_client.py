@@ -170,24 +170,11 @@ class WebSocketClient:
                 # Return the session ID
                 return session_id
             else:
-                # Non-streaming mode: accumulate all response_chunk until stream_end
-                accumulated_chunks = []
-                session_id = None
-                while True:
-                    logger.info("Waiting to receive a message from the WebSocket...")
-                    response_data = await self.connection.recv()
-                    logger.info(f"Received raw data from WebSocket: {response_data}")
-                    response = json.loads(response_data)
-                    if "session_id" in response and not session_id:
-                        session_id = response["session_id"]
-                    if "response_chunk" in response:
-                        accumulated_chunks.append(response["response_chunk"])
-                    elif response.get("event") == "stream_end":
-                        # Join all chunks to form the final response
-                        final_response = " ".join(accumulated_chunks).strip()
-                        return {"response": final_response, "session_id": session_id}
-                    elif "error" in response:
-                        return response
+                # Non-streaming mode: wait for a single response with 'response' field
+                response_data = await self.connection.recv()
+                logger.info(f"Received raw data from WebSocket: {response_data}")
+                response = json.loads(response_data)
+                return response
         except Exception as e:
             logger.error(f"Error sending message over WebSocket: {e}")
             return None
