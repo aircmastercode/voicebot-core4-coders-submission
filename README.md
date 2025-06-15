@@ -1,4 +1,11 @@
+THIS CODE LIES IN THE FINAL BRANCH!
+
+
+
 # P2P Lending Voice AI Assistant
+
+
+
 
 A state-of-the-art voice AI assistant designed to educate potential users about Peer-to-Peer lending and guide them through the initial sales and onboarding process. This application uses advanced speech recognition and synthesis capabilities to create natural, human-like conversation flows.
 
