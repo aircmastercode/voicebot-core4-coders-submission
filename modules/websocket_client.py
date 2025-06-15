@@ -99,19 +99,14 @@ class WebSocketClient:
                 return None
         
         try:
-            # Format the message according to the required structure
+            # Only include 'action' and 'text' fields as per backend expectation
             formatted_message = {
                 "action": "sendMessage",
                 "text": message.get("text", "")
             }
-            
-            # Include other parameters if they exist
-            if "session_id" in message:
-                formatted_message["session_id"] = message["session_id"]
-            if "history" in message:
-                formatted_message["history"] = message["history"]
-                
+            logger.info(f"Sending formatted message to WebSocket: {json.dumps(formatted_message)}")
             await self.connection.send(json.dumps(formatted_message))
+            logger.info("Message sent. Now waiting for response from backend...")
             
             # If stream_handler is provided, handle streaming responses
             if stream_handler:
@@ -121,7 +116,9 @@ class WebSocketClient:
                 
                 # Keep receiving messages until we get a complete response or error
                 while True:
+                    logger.info("Waiting to receive a message from the WebSocket...")
                     response_data = await self.connection.recv()
+                    logger.info(f"Received raw data from WebSocket: {response_data}")
                     response = json.loads(response_data)
                     
                     # Save session ID if available
@@ -173,28 +170,24 @@ class WebSocketClient:
                 # Return the session ID
                 return session_id
             else:
-                # For non-streaming mode, just get a single response
-                response = await self.connection.recv()
-                response_data = json.loads(response)
-                
-                # Generate audio if applicable
-                if "response" in response_data and self.tts_service:
-                    try:
-                        # Generate a unique filename
-                        audio_filename = f"{uuid.uuid4()}.mp3"
-                        audio_path = f"static/audio/{audio_filename}"
-                        
-                        # Convert response to speech
-                        audio_file = self.tts_service.text_to_speech(response_data["response"], audio_path)
-                        
-                        # Add audio URL to the response
-                        if audio_file:
-                            response_data["audio_url"] = f"/static/audio/{audio_filename}"
-                            logger.info(f"Generated audio for WebSocket response: {response_data['audio_url']}")
-                    except Exception as e:
-                        logger.error(f"Error generating audio for WebSocket response: {e}")
-                
-                return response_data
+                # Non-streaming mode: accumulate all response_chunk until stream_end
+                accumulated_chunks = []
+                session_id = None
+                while True:
+                    logger.info("Waiting to receive a message from the WebSocket...")
+                    response_data = await self.connection.recv()
+                    logger.info(f"Received raw data from WebSocket: {response_data}")
+                    response = json.loads(response_data)
+                    if "session_id" in response and not session_id:
+                        session_id = response["session_id"]
+                    if "response_chunk" in response:
+                        accumulated_chunks.append(response["response_chunk"])
+                    elif response.get("event") == "stream_end":
+                        # Join all chunks to form the final response
+                        final_response = " ".join(accumulated_chunks).strip()
+                        return {"response": final_response, "session_id": session_id}
+                    elif "error" in response:
+                        return response
         except Exception as e:
             logger.error(f"Error sending message over WebSocket: {e}")
             return None
