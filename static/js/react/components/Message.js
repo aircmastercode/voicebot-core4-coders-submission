@@ -2,7 +2,7 @@
  * Message Component - Renders a single message in the chat
  */
 const Message = ({ message, isStreaming }) => {
-  const { role, content, audioUrl } = message;
+  const { role, content, audioUrl, audioStatus } = message;
   
   // Determine message class based on role
   const messageClass = role === 'user' ? 'user' : 
@@ -137,7 +137,7 @@ const Message = ({ message, isStreaming }) => {
   // Render the audio player button if audio URL is available
   const renderAudioPlayer = () => {
     if (audioUrl && role === 'assistant') {
-      return <AudioPlayer audioUrl={audioUrl} />;
+      return <AudioPlayer audioUrl={audioUrl} audioStatus={audioStatus || 'ready'} />;
     }
     return null;
   };

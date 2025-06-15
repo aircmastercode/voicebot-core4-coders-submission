@@ -1,10 +1,13 @@
 /**
  * AudioPlayer Component - Plays audio responses
  */
-const AudioPlayer = ({ audioUrl }) => {
+const AudioPlayer = ({ audioUrl, audioStatus }) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [audioError, setAudioError] = React.useState(false);
+  const [isAudioReady, setIsAudioReady] = React.useState(false);
+  const [isPolling, setIsPolling] = React.useState(false);
   const audioRef = React.useRef(null);
+  const pollingIntervalRef = React.useRef(null);
   
   // Ensure we have the correct audio URL (handle both .wav and .mp3)
   const getAudioUrl = () => {
@@ -21,7 +24,7 @@ const AudioPlayer = ({ audioUrl }) => {
   
   // Handle play/pause button click
   const togglePlay = () => {
-    if (!audioRef.current || audioError) return;
+    if (!audioRef.current || audioError || !isAudioReady) return;
     
     if (isPlaying) {
       audioRef.current.pause();
@@ -45,6 +48,47 @@ const AudioPlayer = ({ audioUrl }) => {
       }
     }
   };
+
+  // Check if audio file exists by making a HEAD request
+  const checkAudioExists = () => {
+    if (!audioUrl) return;
+    
+    fetch(getAudioUrl(), { method: 'HEAD' })
+      .then(response => {
+        if (response.ok) {
+          setIsAudioReady(true);
+          setIsPolling(false);
+          clearInterval(pollingIntervalRef.current);
+        }
+      })
+      .catch(error => {
+        console.log('Audio file not ready yet:', error);
+      });
+  };
+  
+  // Start polling for audio file when URL is available but status is "generating"
+  React.useEffect(() => {
+    if (audioUrl && audioStatus === "generating" && !isAudioReady && !isPolling) {
+      setIsPolling(true);
+      
+      // Check immediately
+      checkAudioExists();
+      
+      // Then set up polling
+      pollingIntervalRef.current = setInterval(checkAudioExists, 1000);
+    }
+    
+    // If we get a new audio URL and it's not generating, mark as ready
+    if (audioUrl && audioStatus !== "generating") {
+      setIsAudioReady(true);
+    }
+    
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, [audioUrl, audioStatus, isAudioReady, isPolling]);
   
   // Update playing state when audio plays or pauses
   React.useEffect(() => {
@@ -85,11 +129,23 @@ const AudioPlayer = ({ audioUrl }) => {
     );
   }
   
+  // If audio is still generating, show loading state
+  if (!isAudioReady && audioUrl) {
+    return (
+      <div className="audio-player loading">
+        <span className="audio-loading">
+          <i className="fas fa-spinner fa-spin"></i> Generating audio...
+        </span>
+      </div>
+    );
+  }
+  
   return (
     <div className="audio-player">
       <button 
         className="play-audio-btn"
         onClick={togglePlay}
+        disabled={!isAudioReady}
       >
         <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'}`}></i>
         {isPlaying ? ' Pause Audio' : ' Play Audio'}

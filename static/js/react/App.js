@@ -60,8 +60,8 @@ const App = () => {
   }, []);
   
   // Add a message to the conversation
-  const addMessage = (role, content, audioUrl = null) => {
-    const newMessage = { role, content, audioUrl };
+  const addMessage = (role, content, audioUrl = null, audioStatus = null) => {
+    const newMessage = { role, content, audioUrl, audioStatus };
     setMessages(prevMessages => [...prevMessages, newMessage]);
     return newMessage;
   };
@@ -180,10 +180,10 @@ const App = () => {
       
       // If we have a streaming message, finalize it
       if (streamingMessage) {
-        finalizeStreamingMessage(data.audio_url);
+        finalizeStreamingMessage(data.audio_url, data.audio_status);
       } else {
         // Otherwise, add a new message
-        addMessage('assistant', data.response, data.audio_url);
+        addMessage('assistant', data.response, data.audio_url, data.audio_status);
       }
       
       // Reset state for next interaction
@@ -199,7 +199,8 @@ const App = () => {
     if (data.audio_url && streamingMessage) {
       setStreamingMessage(prevMessage => ({
         ...prevMessage,
-        audioUrl: data.audio_url
+        audioUrl: data.audio_url,
+        audioStatus: data.audio_status || 'generating'
       }));
     }
     
@@ -233,10 +234,15 @@ const App = () => {
   };
   
   // Finalize the streaming message
-  const finalizeStreamingMessage = (audioUrl = null) => {
+  const finalizeStreamingMessage = (audioUrl = null, audioStatus = null) => {
     if (streamingMessage) {
       // Add the streaming message to the conversation history
-      addMessage('assistant', streamingMessage.content, audioUrl || streamingMessage.audioUrl);
+      addMessage(
+        'assistant', 
+        streamingMessage.content, 
+        audioUrl || streamingMessage.audioUrl, 
+        audioStatus || streamingMessage.audioStatus || 'ready'
+      );
       
       // Clear the streaming message
       setStreamingMessage(null);
@@ -300,7 +306,54 @@ const App = () => {
     responseStartTimeRef.current = null;
     setIsFirstChunk(true);
     
-    // Send message to WebSocket
+    // Send text request to the server using fetch for immediate response
+    fetch('/api/text', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        history: messages
+          .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+      }),
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.response) {
+        // Add the bot's response
+        addMessage('assistant', data.response, data.audio_url, data.audio_status);
+        
+        // Hide typing indicator
+        setShowTypingIndicator(false);
+        
+        // Update bot status
+        setBotStatus('idle');
+      }
+    })
+    .catch(error => {
+      console.error('Error sending text message:', error);
+      
+      // Show error message
+      addSystemMessage('Error: Failed to process your message. Please try again.');
+      
+      // Hide typing indicator
+      setShowTypingIndicator(false);
+      
+      // Update bot status
+      setBotStatus('idle');
+    });
+    
+    // Also send message to WebSocket for streaming if available
     if (webSocketRef.current) {
       webSocketRef.current.sendMessage({
         text,
@@ -311,97 +364,81 @@ const App = () => {
   
   // Send a voice message
   const handleSendVoice = (audioBlob) => {
-    // Create form data
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
-    formData.append('history', JSON.stringify(messages.filter(msg => msg.role !== 'system')));
-    
-    // Show typing indicator immediately after voice submission
-    showTypingIndicatorImmediately();
+    // Don't allow sending if the bot is busy
+    if (botStatus === 'thinking') {
+      return;
+    }
     
     // Update bot status
     setBotStatus('thinking');
     
-    // Reset chunk count and timing
-    chunkCountRef.current = 0;
-    responseStartTimeRef.current = null;
-    setIsFirstChunk(true);
+    // Create a FormData object to send the audio file
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
     
-    // Add a "processing voice..." message to indicate STT is running
-    addSystemMessage("Processing your voice input...");
+    // Add conversation history
+    const historyToSend = messages.filter(msg => msg.role === 'user' || msg.role === 'assistant')
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+    formData.append('history', JSON.stringify(historyToSend));
     
-    // Set a default predicted response for voice input
-    setPredictedResponse('I\'m interpreting your question about P2P lending...');
+    // Show the user's message immediately
+    const userMessage = addMessage('user', 'Voice message...');
     
-    // Send the audio to the server
+    // Show typing indicator immediately
+    showTypingIndicatorImmediately();
+    
+    // Generate a predicted response based on context
+    const predictedResponseText = generatePredictedResponse(lastUserQueryRef.current || '');
+    setPredictedResponse(predictedResponseText);
+    
+    // Send the audio file to the server
     fetch('/api/speech', {
       method: 'POST',
-      body: formData
+      body: formData,
     })
       .then(response => {
         if (!response.ok) {
-          throw new Error(`Server responded with status ${response.status}`);
+          throw new Error('Network response was not ok');
         }
         return response.json();
       })
       .then(data => {
-        // Remove the processing message
-        setMessages(prevMessages => 
-          prevMessages.filter(msg => msg.content !== "Processing your voice input...")
-        );
-        
-        // If transcription succeeded, add user message
-        if (data.text) {
-          // Add user message with transcription
-          addMessage('user', data.text);
-          
-          // Update the predicted response based on the transcription
-          const predicted = generatePredictedResponse(data.text);
-          setPredictedResponse(predicted);
-          
-          // Brief timeout to allow the user to see their transcribed message
-          setTimeout(() => {
-            // Handle response if available
-            if (data.response) {
-              // Hide typing indicator
-              setShowTypingIndicator(false);
-              
-              // Add bot message
-              addMessage('assistant', data.response, data.audio_url);
-              
-              // Update bot status
-              setBotStatus('idle');
+        // Update the user message with the transcription
+        setMessages(prevMessages => {
+          return prevMessages.map(msg => {
+            if (msg === userMessage) {
+              return { ...msg, content: data.text };
             }
-          }, 500);
-        } else if (data.error) {
+            return msg;
+          });
+        });
+        
+        // Update the last user query for context
+        lastUserQueryRef.current = data.text;
+        
+        // Handle the response
+        if (data.response) {
+          // Add the bot's response
+          addMessage('assistant', data.response, data.audio_url, data.audio_status);
+          
           // Hide typing indicator
           setShowTypingIndicator(false);
           
-          // Add error message
-          addSystemMessage(`Voice recognition error: ${data.error}`);
-          
           // Update bot status
-          setBotStatus('idle');
-        } else {
-          // No transcription but no explicit error
-          setShowTypingIndicator(false);
-          addSystemMessage("Sorry, I couldn't recognize what you said. Please try again or use text input.");
           setBotStatus('idle');
         }
       })
       .catch(error => {
-        console.error('Error sending audio:', error);
+        console.error('Error sending voice message:', error);
+        
+        // Show error message
+        addSystemMessage('Error: Failed to process your voice message. Please try again.');
         
         // Hide typing indicator
         setShowTypingIndicator(false);
-        
-        // Remove the processing message
-        setMessages(prevMessages => 
-          prevMessages.filter(msg => msg.content !== "Processing your voice input...")
-        );
-        
-        // Add more descriptive error message
-        addSystemMessage('Voice recognition failed. This could be due to audio quality or network issues. Please try again or use text input.');
         
         // Update bot status
         setBotStatus('idle');

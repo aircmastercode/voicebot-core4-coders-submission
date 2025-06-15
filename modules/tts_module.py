@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 class TTSConfig:
     """Configuration for the TTS module, loaded from config.yaml."""
     
-    def __init__(self, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_monolingual_v1", output_format: str = "mp3", speed: float = 1.0):
+    def __init__(self, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_v3", output_format: str = "mp3", speed: float = 1.0, languages: list = None):
         """Initialize TTS configuration with default values."""
         self.voice_id = voice_id
         self.model_id = model_id
         self.output_format = output_format # Note: ElevenLabs streaming always returns PCM, this might be for file saving
         self.speed = speed # This might not be directly used by streaming API, but can be for post-processing
         self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
+        self.languages = languages or ["en", "hi"]  # Default to English and Hindi
         
     @classmethod
     def from_yaml(cls, config_path: str = "config/config.yaml") -> "TTSConfig":
@@ -35,9 +36,10 @@ class TTSConfig:
             tts_config = config.get("tts", {})
             return cls(
                 voice_id=tts_config.get("voice_id", "EXAVITQu4vr4xnSDxMaL"),
-                model_id=tts_config.get("model_id", "eleven_monolingual_v1"),
+                model_id=tts_config.get("model_id", "eleven_v3"),
                 output_format=tts_config.get("output_format", "mp3"),
-                speed=tts_config.get("speed", 1.0)
+                speed=tts_config.get("speed", 1.0),
+                languages=tts_config.get("languages", ["en", "hi"])
             )
         except FileNotFoundError:
             logger.warning(f"Config file not found at {config_path}, using defaults")
@@ -56,7 +58,9 @@ class TTSModule:
             voice_id=self.config.voice_id,
             model_id=self.config.model_id
         )
-        logger.info("TTS Module initialized successfully with ElevenLabs.")
+        # Set supported languages
+        self.elevenlabs_client.supported_languages = self.config.languages
+        logger.info(f"TTS Module initialized successfully with ElevenLabs. Languages: {', '.join(self.config.languages)}")
         
     async def stream_text_to_speech(self, text_stream: AsyncGenerator[str, None]) -> AsyncGenerator[bytes, None]:
         """

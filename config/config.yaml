@@ -33,15 +33,17 @@ api_gateway:
 # ==============================================================================
 asr:
   model_id: scribe_v1 # ElevenLabs STT model
+  languages: ["en", "hi"] # Support for English and Hindi languages
 
 # ==============================================================================
 # TTS (Text-to-Speech) Configuration
 # ==============================================================================
 tts:
   voice_id: EXAVITQu4vr4xnSDxMaL # Default voice for ElevenLabs
-  model_id: eleven_monolingual_v1 # Default model for ElevenLabs
+  model_id: eleven_v3 # Default model for ElevenLabs
   output_format: mp3 # For file saving, streaming is raw PCM
   speed: 1.0 # Not directly used by streaming, but kept for consistency
+  languages: ["en", "hi"] # Support for English and Hindi languages
 
 # ==============================================================================
 # Logging Configuration

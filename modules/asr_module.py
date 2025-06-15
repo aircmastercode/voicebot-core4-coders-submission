@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 class ASRConfig:
     """Configuration for the ASR module, loaded from config.yaml."""
-    def __init__(self, model_id: str = "scribe_v1"): # ElevenLabs STT model
+    def __init__(self, model_id: str = "scribe_v1", languages: list = None): # ElevenLabs STT model
         self.model_id = model_id
         self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "")
+        self.languages = languages or ["en", "hi"]  # Default to English and Hindi
 
     @classmethod
     def from_yaml(cls, config_path: str = "config/config.yaml") -> "ASRConfig":
@@ -29,7 +30,8 @@ class ASRConfig:
                 config = yaml.safe_load(f)
             asr_config = config.get("asr", {})
             return cls(
-                model_id=asr_config.get("model_id", "scribe_v1")
+                model_id=asr_config.get("model_id", "scribe_v1"),
+                languages=asr_config.get("languages", ["en", "hi"])
             )
         except FileNotFoundError:
             logger.warning(f"Config file not found at {config_path}, using defaults")
@@ -45,7 +47,9 @@ class ASRModule:
             api_key=self.config.elevenlabs_api_key,
             model_id=self.config.model_id
         )
-        logger.info("ASR Module initialized successfully with ElevenLabs.")
+        # Set supported languages
+        self.elevenlabs_client.supported_languages = self.config.languages
+        logger.info(f"ASR Module initialized successfully with ElevenLabs. Languages: {', '.join(self.config.languages)}")
 
     async def stream_speech_to_text(self, audio_stream: AsyncGenerator[bytes, None], on_transcription: Callable[[str], None]):
         """
@@ -79,7 +83,11 @@ class ASRModule:
             # Include model_id in request body using multipart/form-data
             with open(file_path, "rb") as audio_file:
                 files = {"file": (Path(file_path).name, audio_file, "audio/wav")}
-                data = {"model_id": self.config.model_id}
+                data = {
+                    "model_id": self.config.model_id,
+                    "language": "auto",  # Auto-detect language
+                    "languages": self.config.languages
+                }
                 response = requests.post(url, headers=headers, data=data, files=files)
             
             if response.status_code == 200:

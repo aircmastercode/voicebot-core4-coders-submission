@@ -248,39 +248,47 @@ class WebSocketService {
       }
       
       // Update status based on message content
-      if (data.response_chunk !== undefined) {
-        this._updateStatus("generating");
-        
-        // Handle streaming chunk
-        this._handleStreamingChunk(data);
+      if (data.error) {
+        this._updateStatus("error");
       } else if (data.response) {
         this._updateStatus("idle");
-        
-        // Handle complete response
+      }
+      
+      // If we have a complete response, clear any chunk processing
+      if (data.response) {
         this._clearChunkProcessing();
         
-        // Pass the message to the callback
-        if (this.onMessageCallback) {
-          this.onMessageCallback(data);
+        // We don't need to forward the complete response if we're using fetch API
+        // The fetch API will handle the complete response separately
+        // Just update the status
+        this._updateStatus("idle");
+        return;
+      }
+      
+      // Handle streaming chunks
+      if (data.response_chunk !== undefined) {
+        // Start chunk processing if not already started
+        if (!this.isProcessingChunks) {
+          this.isProcessingChunks = true;
+          this.lastChunkTime = Date.now();
+          this.batchCount = 0;
+          
+          // Start the chunk processor
+          this.chunkProcessInterval = setInterval(() => {
+            this._processBatchedChunks();
+          }, this.chunkDelay);
         }
-      } else if (data.error) {
-        this._updateStatus("error");
         
-        // Clear chunk processing on error
-        this._clearChunkProcessing();
-        
-        // Pass the error to the callback
-        if (this.onMessageCallback) {
-          this.onMessageCallback(data);
-        }
-      } else {
-        // Pass other messages directly to the callback
-        if (this.onMessageCallback) {
-          this.onMessageCallback(data);
-        }
+        // Add the chunk to the buffer
+        this.chunkBuffer.push(data);
+      }
+      
+      // Forward the message to the callback
+      if (this.onMessageCallback) {
+        this.onMessageCallback(data);
       }
     } catch (error) {
-      console.error("Error parsing WebSocket message:", error);
+      console.error("Error handling WebSocket message:", error);
     }
   }
   

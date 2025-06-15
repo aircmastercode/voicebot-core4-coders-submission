@@ -17,12 +17,15 @@ class ElevenLabsWebSocketClient:
     """
     A WebSocket client for ElevenLabs Text-to-Speech (TTS) and Speech-to-Text (STT) streaming.
     """
-    def __init__(self, api_key: str, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_monolingual_v1"): # Default voice and model for demonstration
+    def __init__(self, api_key: str, voice_id: str = "EXAVITQu4vr4xnSDxMaL", model_id: str = "eleven_v3"): # Default voice and model for demonstration
         self.api_key = api_key
         self.voice_id = voice_id
         self.model_id = model_id
         self.websocket = None
-        self.uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream-input?model_id={self.model_id}"
+        # For TTS WebSocket
+        self.uri = f"wss://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}/stream-input?model_id={self.model_id}&output_format=pcm_16000"
+        # Add language codes to limit languages to Hindi and English
+        self.supported_languages = ["en", "hi"]
         self.is_connected = False
 
     async def connect(self):
@@ -36,6 +39,7 @@ class ElevenLabsWebSocketClient:
                 "text": " ", # Initial handshake message
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.8},
                 "xi_api_key": self.api_key,
+                "languages": self.supported_languages  # Specify supported languages
             }))
             return True
         except Exception as e:
@@ -93,7 +97,8 @@ class ElevenLabsWebSocketClient:
                 await ws.send(json.dumps({
                     "xi_api_key": self.api_key,  # Use xi_api_key instead of api_key
                     "sample_rate": 16000, # ElevenLabs STT expects 16kHz
-                    "language": "en" # Assuming English for now
+                    "language": "auto", # Auto-detect between supported languages
+                    "languages": self.supported_languages # Limit to Hindi and English
                 }))
 
                 # Task to send audio

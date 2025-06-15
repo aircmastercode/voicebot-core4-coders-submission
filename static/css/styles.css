@@ -199,31 +199,34 @@ main {
   to { width: 100% }
 }
 
+/* Enhanced message animation for immediate display */
+.message.bot {
+  animation: fadeIn 0.2s ease-in;
+  transition: all 0.3s ease-in-out;
+}
+
 .message.bot .streaming-text.active-streaming {
-  display: inline-block;
-  overflow: hidden;
-  white-space: normal;
-  animation: fadeIn 0.1s;
-}
-
-/* Natural typing rhythm */
-.message.bot .streaming-text.active-streaming p {
-  transition: color 0.2s ease;
-}
-
-/* Immediate response styling */
-.message.bot .streaming-text.active-streaming p:first-child {
+  display: block;
   position: relative;
+  line-height: 1.6;
 }
 
-/* Batch animation for paragraph transitions */
+.message.bot .streaming-text.active-streaming p {
+  animation: paragraphFadeIn 0.5s ease-in-out;
+  margin-bottom: 0.5rem;
+}
+
+.message.bot .streaming-text.active-streaming p:first-child {
+  animation: none;
+}
+
 @keyframes paragraphFadeIn {
-  from { opacity: 0.7; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .message.bot .streaming-text.active-streaming p:last-child {
-  animation: paragraphFadeIn 0.5s;
+  margin-bottom: 0;
 }
 
 /* Input area */
@@ -521,41 +524,75 @@ main {
   background-color: var(--primary-dark);
 }
 
-/* Audio player */
+/* Enhanced Audio Player */
 .audio-player {
-  width: 100%;
-  margin: 0.5rem 0;
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.3s ease;
 }
 
 .play-audio-btn {
-  display: block;
-  width: 100%;
-  padding: 0.5rem;
-  background-color: var(--secondary-color);
+  background: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 0.25rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
   cursor: pointer;
-  margin-bottom: 0.5rem;
-  transition: background-color 0.3s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .play-audio-btn:hover {
-  background-color: #2d9448;
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.play-audio-btn:disabled {
+  background: #b0b0b0;
+  cursor: not-allowed;
 }
 
 .audio-player.error {
-  display: flex;
-  align-items: center;
-  margin-top: 10px;
+  color: var(--accent-color);
+  font-size: 0.85rem;
 }
 
 .audio-error {
-  color: #e74c3c;
-  font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.4rem;
+}
+
+.audio-player.loading {
+  color: var(--text-light);
+  font-size: 0.85rem;
+  animation: fadeIn 0.3s ease;
+}
+
+.audio-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.audio-loading i {
+  animation: spin 1.2s linear infinite;
+}
+
+/* Improved fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Utility classes */

@@ -19,6 +19,7 @@ import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_from_directory, send_file
+import threading
 
 # Add the project root to the Python path
 sys.path.append('.')
@@ -153,26 +154,34 @@ def process_text():
             except Exception:
                 final_response = "I'm sorry, I'm experiencing technical difficulties right now. Please try again later."
         
-        # Generate speech for the response
-        audio_file = None
-        audio_url = None
+        # Generate a unique ID for the audio file that will be generated
+        audio_filename = f"{uuid.uuid4()}.wav"
+        audio_url = f"/static/audio/{audio_filename}"
         
-        try:
-            if MODULES_INITIALIZED:
-                # Generate a unique filename
-                audio_filename = f"{uuid.uuid4()}.wav"
-                audio_path = AUDIO_DIR / audio_filename
-                
-                # Convert response to speech
-                audio_file = asyncio.run(tts_module.text_to_speech_file(final_response, str(audio_path)))
-                audio_url = f"/static/audio/{audio_filename}" if audio_file else None
-        except Exception as e:
-            logger.error(f"Error generating speech: {e}")
+        # Start audio generation in a background thread
+        def generate_audio_in_background():
+            try:
+                if MODULES_INITIALIZED:
+                    # Generate a unique filename
+                    audio_path = AUDIO_DIR / audio_filename
+                    
+                    # Ensure the directory exists
+                    os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+                    
+                    # Convert response to speech
+                    audio_file = asyncio.run(tts_module.text_to_speech_file(final_response, str(audio_path)))
+                    logger.info(f"Audio generation complete: {audio_url}")
+            except Exception as e:
+                logger.error(f"Error generating speech response: {e}")
         
-        # Return the response
+        # Start the background thread for audio generation
+        threading.Thread(target=generate_audio_in_background).start()
+        
+        # Return the response immediately with the expected audio URL
         return jsonify({
             "response": final_response,
-            "audio_url": audio_url
+            "audio_url": audio_url,
+            "audio_status": "generating"  # Indicate that audio is being generated
         })
         
     except Exception as e:
@@ -304,24 +313,35 @@ def process_speech():
                 except Exception:
                     final_response = "I'm sorry, I'm experiencing technical difficulties right now. Please try again later."
             
-            # Generate speech for the response
-            try:
-                if MODULES_INITIALIZED:
-                    # Generate a unique filename
-                    audio_filename = f"{uuid.uuid4()}.wav"  # Use .wav extension to match what TTS module produces
-                    audio_path = AUDIO_DIR / audio_filename
-                    
-                    # Convert response to speech
-                    audio_file = asyncio.run(tts_module.text_to_speech_file(final_response, str(audio_path)))
-                    audio_url = f"/static/audio/{audio_filename}" if audio_file else None
-            except Exception as e:
-                logger.error(f"Error generating speech response: {e}")
+            # Generate a unique ID for the audio file that will be generated
+            audio_filename = f"{uuid.uuid4()}.wav"
+            audio_url = f"/static/audio/{audio_filename}"
             
-            # Return the response
+            # Start audio generation in a background thread
+            def generate_audio_in_background():
+                try:
+                    if MODULES_INITIALIZED:
+                        # Generate a unique filename
+                        audio_path = AUDIO_DIR / audio_filename
+                        
+                        # Ensure the directory exists
+                        os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+                        
+                        # Convert response to speech
+                        audio_file = asyncio.run(tts_module.text_to_speech_file(final_response, str(audio_path)))
+                        logger.info(f"Audio generation complete: {audio_url}")
+                except Exception as e:
+                    logger.error(f"Error generating speech response: {e}")
+            
+            # Start the background thread for audio generation
+            threading.Thread(target=generate_audio_in_background).start()
+            
+            # Return the response immediately with the expected audio URL
             return jsonify({
                 "text": transcription,
                 "response": final_response,
-                "audio_url": audio_url
+                "audio_url": audio_url,
+                "audio_status": "generating"  # Indicate that audio is being generated
             })
             
         except Exception as e:
@@ -338,82 +358,116 @@ def process_speech():
 
 @app.route('/api/speech-to-speech', methods=['POST'])
 async def process_speech_to_speech():
-    """Process speech input and convert it to speech with a different voice"""
+    """Process speech input and return speech output"""
     try:
         # Check if audio file is present
         if 'audio' not in request.files:
             return jsonify({"error": "No audio file provided"}), 400
         
         audio_file = request.files['audio']
-        target_voice = request.form.get('voice_id', 'EXAVITQu4vr4xnSDxMaL')  # Default voice if not specified
-        
-        # Create a unique session ID for this conversation
-        session_id = str(uuid.uuid4())
+        voice_id = request.form.get('voice_id', None)
         
         # Save the audio file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
             audio_file.save(temp_file.name)
             temp_path = temp_file.name
         
+        transcription = ""
+        final_response = ""
         audio_url = None
         
+        # Transcribe the audio
         try:
-            if MODULES_INITIALIZED and hasattr(asr_module, 'elevenlabs_client'):
-                # Create a temporary file for the output audio
-                output_filename = f"{uuid.uuid4()}.wav"
-                output_path = AUDIO_DIR / output_filename
-                
-                # Ensure the directory exists
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                # Perform speech-to-speech conversion
-                async def perform_sts():
-                    with open(output_path, "wb") as output_file:
-                        # Function to handle audio chunks
-                        def on_audio_chunk(chunk):
-                            output_file.write(chunk)
-                        
-                        # Create an async generator for the input audio file
-                        async def audio_file_stream():
-                            chunk_size = 4096  # 4KB chunks
-                            with open(temp_path, "rb") as f:
-                                while chunk := f.read(chunk_size):
-                                    yield chunk
-                        
-                        # Set the target voice ID
-                        original_voice_id = asr_module.elevenlabs_client.voice_id
-                        asr_module.elevenlabs_client.voice_id = target_voice
-                        
-                        # Perform speech-to-speech conversion
-                        await asr_module.elevenlabs_client.stream_sts(audio_file_stream(), on_audio_chunk)
-                        
-                        # Restore the original voice ID
-                        asr_module.elevenlabs_client.voice_id = original_voice_id
-                
-                await perform_sts()
-                
-                audio_url = f"/static/audio/{output_filename}"
-                logger.info(f"Generated speech-to-speech audio: {audio_url}")
+            if MODULES_INITIALIZED:
+                transcription = asr_module.transcribe_file(temp_path)
             else:
                 # Fallback for demonstration
-                logger.warning("Speech-to-speech conversion is not available (modules not initialized)")
+                transcription = "This is a demo transcription as the ASR module is not available."
                 
             # Clean up temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
                 
-            # Return the response
+            if not transcription:
+                return jsonify({"error": "Could not transcribe audio"}), 400
+                
+            logger.info(f"Transcribed speech: '{transcription}'")
+            
+            # Generate a unique ID for the audio file that will be generated
+            audio_filename = f"{uuid.uuid4()}.wav"
+            audio_url = f"/static/audio/{audio_filename}"
+            
+            # Process the transcription through the NLP pipeline
+            if MODULES_INITIALIZED:
+                try:
+                    # Create a unique session ID for this conversation
+                    session_id = str(uuid.uuid4())
+                    
+                    # Process the transcription through the NLP pipeline
+                    nlp_data = await nlp_pipeline.process_input(
+                        transcription, 
+                        session_id=session_id,
+                        history=[]
+                    )
+                    
+                    # Check if we should use fallback
+                    if fallback_service.should_use_fallback(nlp_data):
+                        logger.warning("NLP pipeline returned invalid data, using fallback")
+                        final_response = fallback_service.get_fallback_response(transcription, [])
+                    else:
+                        # Generate the final response
+                        final_response = response_generator.get_final_answer(nlp_data)
+                except Exception as e:
+                    logger.error(f"Error in NLP processing: {e}", exc_info=True)
+                    final_response = fallback_service.get_fallback_response(transcription, [])
+            else:
+                # Use fallback service if modules are not initialized
+                try:
+                    final_response = fallback_service.get_fallback_response(transcription, [])
+                except Exception:
+                    final_response = "I'm sorry, I'm experiencing technical difficulties right now. Please try again later."
+            
+            # Start audio generation in a background thread
+            def generate_audio_in_background():
+                try:
+                    if MODULES_INITIALIZED:
+                        # Generate a unique filename
+                        audio_path = AUDIO_DIR / audio_filename
+                        
+                        # Ensure the directory exists
+                        os.makedirs(os.path.dirname(audio_path), exist_ok=True)
+                        
+                        # Convert response to speech with the selected voice
+                        tts_options = {}
+                        if voice_id:
+                            tts_options['voice_id'] = voice_id
+                            
+                        audio_file = asyncio.run(tts_module.text_to_speech_file(
+                            final_response, 
+                            str(audio_path), 
+                            **tts_options
+                        ))
+                        logger.info(f"Audio generation complete: {audio_url}")
+                except Exception as e:
+                    logger.error(f"Error generating speech response: {e}")
+            
+            # Start the background thread for audio generation
+            threading.Thread(target=generate_audio_in_background).start()
+            
+            # Return the response immediately with the expected audio URL
             return jsonify({
-                "message": "Speech-to-speech conversion completed",
-                "audio_url": audio_url
+                "text": transcription,
+                "response": final_response,
+                "audio_url": audio_url,
+                "audio_status": "generating"  # Indicate that audio is being generated
             })
             
         except Exception as e:
-            logger.error(f"Error in speech-to-speech conversion: {e}", exc_info=True)
+            logger.error(f"Error transcribing audio: {e}")
             # Clean up temp file
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            return jsonify({"error": "Failed to convert speech"}), 500
+            return jsonify({"error": "Failed to transcribe audio"}), 500
         
     except Exception as e:
         logger.error(f"Error processing speech-to-speech request: {e}", exc_info=True)
